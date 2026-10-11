@@ -1,0 +1,1222 @@
+# MY TRAVEL MAP — PROJECT CONTEXT
+
+## 1. Project purpose
+
+This project is a personal travel-history web application called My Travel Map.
+
+The application is intended primarily to run locally on a Mac laptop. It provides a detailed global map where the user records countries, cities, towns, mountains, landmarks, waypoints, and other places they have visited.
+
+The application should remain simple to operate, require no paid mapping subscription, and keep the user's travel database under the user's control.
+
+The current application version is
+
+My Travel Map v7
+
+The latest package is
+
+`My_Travel_Map_OpenFreeMap_v7_BetterSelection_Profile_Mac.zip`
+
+---
+
+# 2. Core design principles
+
+The following requirements should be preserved in all future versions.
+
+### Local-first
+
+The application runs locally on the user's Mac.
+
+It is launched using
+
+`Launch My Travel Map.command`
+
+This starts a lightweight Python local web server.
+
+The application is then accessed through a local browser address such as
+
+`127.0.0.1port`
+
+The application should NOT require deployment to a public server.
+
+### User owns the data
+
+The master travel database is
+
+`travel-data.json`
+
+This file normally resides in the same folder as the application.
+
+The application must not rely on browser localStorage as its primary database.
+
+Browser localStorage is only a fallbackmigration mechanism.
+
+### Automatic persistence
+
+Whenever the user
+
+- adds a place
+- edits a place
+- deletes a place
+- edits their profile
+- merges imported travel data
+- replaces imported travel data
+
+the application must automatically update `travel-data.json`.
+
+The user should NOT have to manually press a Save button after ordinary changes.
+
+The app waits for confirmation from the local server that the JSON file was successfully written.
+
+If saving fails, the UI must not pretend the change was safely committed.
+
+### Upgrade compatibility
+
+Future versions should continue to read older `travel-data.json` files whenever reasonably possible.
+
+When providing a new ZIPversion, the user should keep their existing populated
+
+`travel-data.json`
+
+and replaceupdate the application files around it.
+
+Do not overwrite the user's populated JSON with an empty sample during upgrades.
+
+---
+
+# 3. Current application architecture
+
+Current stack
+
+- HTML
+- CSS
+- vanilla JavaScript
+- MapLibre GL JS
+- OpenFreeMap
+- OpenStreetMap-derived data
+- Python 3 local HTTP server
+- JSON local database
+
+There is no conventional backend database.
+
+The Python server exists mainly to
+
+1. serve the application locally;
+2. read `travel-data.json`;
+3. write `travel-data.json`;
+4. overcome browser restrictions preventing a normal HTML page from directly modifying a neighboring local file.
+
+---
+
+# 4. Application files
+
+The application package contains approximately
+
+`My_Travel_Map.html`
+
+Main UI and application logic.
+
+`travel-data.json`
+
+Master user database.
+
+`server.py`
+
+Local Python HTTP server and JSON readwrite API.
+
+`Launch My Travel Map.command`
+
+Mac launcher.
+
+`README.txt`
+
+Installationversion information.
+
+These files should remain together in one folder.
+
+---
+
+# 5. Launcherserver behavior
+
+The user should launch the application using
+
+`Launch My Travel Map.command`
+
+rather than opening the HTML using `file`.
+
+This is important because direct HTML execution cannot reliably write `travel-data.json`.
+
+## Historical launcher problem
+
+Earlier versions always attempted to use
+
+`127.0.0.18765`
+
+If an older Travel Map server was still running on that port, launching a newer application could accidentally open the older application.
+
+This caused a confusing situation where
+
+- opening the new HTML directly showed new features;
+- launching through the command file showed an older version with features missing.
+
+## Current solution
+
+The v6+ launcherserver architecture
+
+1. tries port 8765;
+2. if occupied, automatically selects another free local port;
+3. opens the browser using the actual port assigned to the new server;
+4. serves HTMLJS with no-cache headers;
+5. displays the application version in the UI;
+6. displays the exact folderaddress in Terminal.
+
+Future versions MUST preserve this behavior.
+
+Never assume port 8765 is available.
+
+---
+
+# 6. Mapping platform
+
+The application originally used Leaflet and various raster tile services.
+
+CARTO was subsequently used for English-labelled maps, but the public endpoint returned an API-keyservice error.
+
+The project therefore migrated to
+
+MapLibre GL JS + OpenFreeMap
+
+This is the current mapping architecture.
+
+The objective is
+
+- global mapping;
+- detailed roads;
+- citiestowns;
+- landmarks;
+- mountains;
+- vector rendering;
+- no paid Google Maps dependency;
+- no application API key;
+- EnglishLatin labels where possible.
+
+Do not revert to CARTO.
+
+Do not make Google Maps the application's primary map provider.
+
+---
+
+# 7. Current map styles
+
+The application has offered OpenFreeMap styles including
+
+- Liberty
+- Bright
+- Positron  Light
+- Dark
+- Fiord
+
+Map styles may evolve, but users should continue to have multiple visual choices.
+
+---
+
+# 8. EnglishLatin map labels
+
+An important user requirement is that map labels should be understandable in English characters.
+
+This is particularly relevant for countries such as
+
+- China
+- Japan
+- Korea
+- Russia
+- etc.
+
+The application currently attempts to display map labels using the following preference
+
+1. `nameen`
+2. `namelatin`
+3. `name`
+
+Do not intentionally revert to local-script-only labels.
+
+Search and reverse geocoding also request English results where possible.
+
+---
+
+# 9. Map navigation
+
+The map should support normal modern map navigation
+
+- pan;
+- zoom;
+- zoom controls;
+- scale;
+- world view;
+- fit to saved places;
+- search for countriescitiestowns;
+- multiple map styles.
+
+There is a countryplace search field.
+
+Entering a country or city should zoom the map appropriately.
+
+---
+
+# 10. Adding a visited place
+
+The main interaction is clicking the map.
+
+The user clicks a location and gets an Add Place dialog.
+
+The dialog contains approximately
+
+- place name;
+- country;
+- notes;
+- coordinates.
+
+The user confirms the place and it becomes a saved markertag.
+
+The marker is then persisted to `travel-data.json`.
+
+---
+
+# 11. Better map feature selection — v7
+
+Earlier versions relied heavily on reverse geocoding.
+
+This produced several problems.
+
+For example
+
+- clicking the text label of a city could return a district or administrative region instead of the city;
+- clicking a mountain often failed to select the mountain;
+- landmarks and waypoints were not reliably identified;
+- the coordinates could represent the exact mouse position rather than the geographic feature.
+
+v7 changed this.
+
+## Current intended selection algorithm
+
+When the user clicks the map, first use
+
+`map.queryRenderedFeatures()`
+
+around a small screen-space area surrounding the click.
+
+The application evaluates the rendered vector features and ranks them.
+
+High priority
+
+1. mountains  peaks;
+2. cities;
+3. towns;
+4. villages;
+5. named POIs;
+6. landmarks;
+7. viewpoints  attractions  similar waypoints.
+
+Low priority
+
+- administrative boundaries;
+- broad administrative regions;
+- roads;
+- highways;
+- landcover;
+- generic polygons.
+
+If a useful named vector feature is found, use that feature's name.
+
+For point features, use the feature's actual geographic coordinates rather than merely the location where the user clicked on the label.
+
+Reverse geocoding is then used mainly for
+
+- determining the country;
+- filling missing information;
+- fallback when no useful rendered feature exists.
+
+Future work should continue improving this feature-selection behavior.
+
+Accuracy when clicking labels is more important than blindly trusting reverse geocoding.
+
+---
+
+# 12. Mountain support
+
+The user explicitly wants mountain names.
+
+Earlier map styles did not consistently expose mountains.
+
+A dedicated mountainpeak label layer was therefore added using the vector source layer
+
+`mountain_peak`
+
+Mountain labels prefer
+
+1. English name;
+2. Latin transliteration;
+3. original name.
+
+Mountainspeaks are also given very high priority in the v7 map-click selection logic.
+
+Future versions should preserve mountain visibility and clickability.
+
+---
+
+# 13. Saved-place markers
+
+Each saved location appears as a markertag on the map.
+
+Clicking a marker shows information such as
+
+- place name;
+- country;
+- notes.
+
+Marker popup actions include
+
+- Edit;
+- Delete.
+
+---
+
+# 14. Edit and delete
+
+EditDelete functionality must always be clearly visible.
+
+Earlier versions accidentally made these actions difficult to discover.
+
+The current intended behavior provides EditDelete
+
+- beside saved locations in the Places panel;
+- inside the popup for a map marker.
+
+Editing should allow changes to
+
+- place name;
+- country;
+- notes.
+
+Deleting requires confirmation.
+
+After EditDelete, `travel-data.json` must be updated immediately.
+
+---
+
+# 15. Places sidebar
+
+The left sidebar and right map MUST be independent.
+
+An earlier layout bug caused the Places list to become taller as more locations were added, which pushedresized the map and created blank space above it.
+
+This was fixed.
+
+Current layout principle
+
+- application is fixed to viewport height;
+- sidebar has its own internal scrolling;
+- map occupies its own fixed viewport area;
+- increasing the number of saved locations must NOT move or resize the map.
+
+Preserve this.
+
+---
+
+# 16. Country grouping
+
+Saved places are no longer intended to be one large flat list.
+
+They are grouped by country.
+
+Example
+
+Malaysia (34)
+
+▼ Ipoh  
+▼ Penang  
+▼ Taiping  
+...
+
+Singapore (12)
+
+...
+
+Each country heading displays
+
+`Country Name (number of saved tags)`
+
+Example
+
+`Malaysia (34)`
+
+The number represents the number of saved locations assigned to that country.
+
+---
+
+# 17. Country sorting
+
+The Places panel provides
+
+- Country A–Z
+- Country Z–A
+
+Places within each country are sorted alphabetically.
+
+---
+
+# 18. Collapse  expand
+
+Each country group can be independently
+
+- expanded;
+- collapsed.
+
+The user can therefore browse a large travel history without seeing hundreds of locations simultaneously.
+
+The collapse state is currently remembered using browser localStorage.
+
+This UI preference does not need to be part of the travel database unless a future design deliberately changes that.
+
+---
+
+# 19. Filtering
+
+There is a saved-place filtersearch function.
+
+It should search relevant information including
+
+- place name;
+- country;
+- notes.
+
+---
+
+# 20. Data architecture
+
+The current conceptual JSON structure is
+
+```json
+{
+  app My Travel Map,
+  version 7,
+  profile {
+    name ,
+    yearOfBirth 
+  },
+  places [
+    {
+      id unique-id,
+      name Ipoh,
+      country Malaysia,
+      notes ,
+      lat 4.59,
+      lng 101.09
+    }
+  ]
+}
+```
+
+Future versions may add fields, but should maintain backwards compatibility where practical.
+
+---
+
+# 21. Profile
+
+v7 introduced a personal profile.
+
+Current profile fields
+
+- Name
+- Year of birth
+
+The Profile button opens an editing dialog.
+
+The profile is saved inside
+
+`travel-data.json`
+
+under
+
+```json
+profile {
+  name ...,
+  yearOfBirth ...
+}
+```
+
+The Python server must preserve the profile object when writing the JSON file.
+
+This is important because an earlier server implementation rebuilt the JSON using only `places`, which would have silently discarded profile data.
+
+v7 explicitly corrected this.
+
+---
+
+# 22. Browser localStorage
+
+Browser localStorage exists only as a secondary mechanism.
+
+It is NOT browser history, but clearing browsersite data can remove it.
+
+Therefore it must not be treated as permanent travel storage.
+
+Historical localStorage key for places
+
+`myTravelMap.places.v2`
+
+Profile may also have a local fallback key.
+
+## Migration behavior
+
+If
+
+- `travel-data.json` is empty;
+- browser localStorage contains existing places;
+
+the application should automatically migrate the browser places into `travel-data.json`.
+
+If both contain data and differ
+
+DO NOT silently overwrite either database.
+
+Instead provide
+
+Sync browser → JSON
+
+This lets the user deliberately copy the browser version into the master JSON file.
+
+The UI should display a status such as
+
+`✓ JSON connected — 87 places loaded`
+
+This reassures the user that the real JSON file is being used.
+
+---
+
+# 23. Automatic save reliability
+
+Automatic save is a critical requirement.
+
+Every mutation should
+
+1. update the in-memory data;
+2. send the updated data to the local Python API;
+3. wait for successful confirmation;
+4. only then treat the operation as committed.
+
+If the write fails
+
+- show a clear error;
+- do not silently pretend that the JSON database was updated;
+- roll back the visible change when appropriate.
+
+This applies to
+
+- Add;
+- Edit;
+- Delete;
+- Profile changes;
+- imports.
+
+---
+
+# 24. JSON backup
+
+There is a
+
+Backup JSON
+
+function.
+
+It downloads a copy of the current travel database.
+
+This is separate from the automatically maintained master `travel-data.json`.
+
+---
+
+# 25. Import behavior
+
+Import was originally dangerous because selecting a JSON file immediately replaced the existing database.
+
+This was changed.
+
+Current import should present three choices
+
+### Merge with existing
+
+This should be the safedefault approach.
+
+It
+
+- keeps existing places;
+- adds imported places;
+- skips obvious duplicates.
+
+Duplicate detection currently uses a combination roughly equivalent to
+
+- normalized place name;
+- normalized country;
+- rounded coordinates.
+
+Future versions may improve duplicate detection.
+
+### Replace All
+
+This intentionally replaces the current travel database.
+
+Before replacement
+
+1. clearly warn the user;
+2. automatically download a backup of the current database;
+3. require confirmation;
+4. only then overwrite `travel-data.json`.
+
+### Cancel
+
+Makes no changes.
+
+Never revert to immediate destructive replacement on import.
+
+---
+
+# 26. Profile handling during import
+
+Current intended behavior
+
+### Merge
+
+Preserve the existing profile.
+
+If the existing profile is empty and the imported file contains a profile, the application may adopt the imported profile.
+
+### Replace All
+
+If the imported file contains a profile, that profile may replace the current profile.
+
+The pre-replacement backup must contain the old profile.
+
+---
+
+# 27. Google Maps interoperability
+
+The user asked to be able to load the travel history into Google Maps.
+
+The application therefore includes
+
+Google KML
+
+export.
+
+This creates a `.kml` file containing the saved locations.
+
+The KML is intended for import into Google My Maps.
+
+Marker data includes approximately
+
+- place name;
+- latitude;
+- longitude;
+- country;
+- notes.
+
+v7 may also include profile metadata at document level.
+
+Google Maps is an export target, not the application's primary mapping engine.
+
+---
+
+# 28. Searchgeocoding
+
+OpenStreetMap Nominatim has been used for
+
+- place search;
+- reverse geocoding.
+
+Queries request English language results where possible.
+
+Be mindful that public Nominatim is a shared service and should not be aggressively queried.
+
+Normal user-driven clickssearches are appropriate.
+
+Do not implement high-frequency bulk geocoding against the public endpoint.
+
+---
+
+# 29. Free-map requirement
+
+The user specifically wants a free mapping solution.
+
+The app should avoid designs requiring
+
+- Google Maps billing;
+- Mapbox paid account;
+- CARTO API keys;
+- paid tile subscriptions.
+
+The current OpenFreeMapMapLibre approach was selected specifically for this reason.
+
+If mapping providers change in the future, verify current usage terms before replacing OpenFreeMap.
+
+---
+
+# 30. Existing travel data
+
+The project was initially created around the user's travel history.
+
+A substantial Malaysia list was supplied early in the project, including locations such as
+
+- Ipoh
+- Penang
+- Taiping
+- Kuala Kangsar
+- Alor Setar
+- Lumut
+- Teluk Intan
+- Pulau Pangkor
+- Gerik
+- Kuala Kubu Bahru
+- Cameron Highlands
+- Gua Musang
+- Jeli
+- Belum
+- Fraser's Hill
+- Kuala Terengganu
+- Kota Bahru
+- Kenyir Lake
+- Kuantan
+- Mersing
+- Air Papan
+- Rompin
+- Desaru
+- Pengerang
+- Rengit
+- Johor Bahru
+- Kukup
+- Melaka
+- Kota Tinggi
+- Port Dickson
+- Petaling Jaya
+- and additional places.
+
+Do NOT reconstruct the user's actual current database from this list.
+
+The authoritative current database is the user's own populated
+
+`travel-data.json`
+
+---
+
+# 31. Mac behavior
+
+Primary development target is macOS.
+
+The user launches through a `.command` file.
+
+The launcher should
+
+- determine its own directory;
+- `cd` into that directory;
+- verify Python 3 exists;
+- run `server.py`;
+- open the application automatically;
+- clearly show the application version;
+- clearly show the local server address.
+
+Do not hard-code paths to a specific user's home directory.
+
+---
+
+# 32. iPhonemobile consideration
+
+The user previously asked whether the map could work on iPhone.
+
+The UI therefore has responsivemobile CSS.
+
+However, the current primary architecture remains a Mac-local application.
+
+A Mac-local server is not automatically equivalent to a standalone iPhone application.
+
+Do not compromise the Mac-local persistence architecture merely to make it look like an iPhone app unless the user explicitly asks to change deployment architecture.
+
+---
+
+# 33. Current responsive layout
+
+Desktop
+
+- left Placessidebar;
+- right map.
+
+Mobilenarrow screen
+
+- sidebar and map become vertically arranged.
+
+Both sections should retain bounded dimensions and independent scrolling.
+
+---
+
+# 34. UI philosophy
+
+The user prefers functional, information-dense UI over decorative complexity.
+
+Important controls should be discoverable.
+
+Do not hide essential operations behind undocumented gestures.
+
+In particular
+
+- Edit should be visible;
+- Delete should be visible;
+- country counts should be visible;
+- JSON connection status should be visible;
+- map-style selection should be visible;
+- Profile should be visible.
+
+---
+
+# 35. Version history  important lessons
+
+## Early versions
+
+Leaflet-based map with browser localStorage.
+
+Problem
+
+Data could disappear if browser site storage was cleared.
+
+## Local JSON version
+
+Added
+
+- `travel-data.json`;
+- Python local server;
+- Mac launcher.
+
+## English map version
+
+Changed mapping to improve EnglishLatin labels.
+
+## Independent-panel fix
+
+Fixed sidebar growth pushing the map vertically.
+
+## Google interoperability
+
+Added KML export.
+
+## CARTO issue
+
+CARTO public map endpoint began requestingrequiring API access.
+
+Decision
+
+Remove CARTO.
+
+## OpenFreeMap migration
+
+Moved to
+
+MapLibre + OpenFreeMap.
+
+## Mountain support
+
+Added dedicated mountainpeak labels.
+
+## EditDelete restoration
+
+Added explicit controls in list and marker popup.
+
+## JSON migration
+
+Added browser-localStorage → JSON migration.
+
+## Safe Save
+
+AddEditDelete now wait for server write confirmation.
+
+## Safe Import
+
+Added Merge  Replace All  Cancel.
+
+## Country grouping
+
+Added
+
+- grouping by country;
+- counts;
+- A–ZZ–A;
+- collapseexpand.
+
+## Launcher fix
+
+Fixed old local serverport collision problem.
+
+## v7
+
+Added
+
+- improved rendered-feature selection;
+- better citymountainPOI selection;
+- profile name;
+- year of birth;
+- profile persistence in JSON.
+
+---
+
+# 36. Current known area for further improvement
+
+Map selection should continue to be tested extensively.
+
+Important test cases
+
+### City label
+
+Click directly on a city name.
+
+Expected
+
+Save the city, not its administrative district.
+
+### Mountain label
+
+Click directly on a named mountain.
+
+Expected
+
+Save the mountain name and mountain point.
+
+### Landmark
+
+Click a named landmarkPOI.
+
+Expected
+
+Save the landmark rather than the surrounding neighborhood.
+
+### Empty map area
+
+Click somewhere without a useful rendered feature.
+
+Expected
+
+Use reverse geocoding as fallback.
+
+### Labels near each other
+
+If several features overlap around the cursor, rank the most likely intentional label rather than arbitrarily selecting a polygon underneath.
+
+Future improvements could include a small chooser such as
+
+`What did you mean`
+
+- Mount Kinabalu
+- Kinabalu Park
+- Kundasang
+
+when multiple high-quality candidates exist.
+
+This may be preferable to making the ranking algorithm increasingly complicated.
+
+---
+
+# 37. Potential future enhancements
+
+These are ideas, NOT current requirements
+
+- visited dateyear;
+- trip grouping;
+- multiple visits to same place;
+- photos;
+- country statistics;
+- number of countries visited;
+- number of cities visited;
+- map heatmap;
+- visited-country shading;
+- travel timeline;
+- country flags;
+- continent grouping;
+- export CSV;
+- GeoJSON export;
+- GPX importexport;
+- automatic database backup rotation;
+- optional local photos folder;
+- trip routes;
+- statistics by year;
+- distance travelled;
+- map screenshots;
+- optional iCloudDropbox sync;
+- optional iPhone companion version.
+
+Do not implement these automatically without user request.
+
+---
+
+# 38. Development rules for future versions
+
+When modifying the application
+
+1. Start from the latest working version, currently v7.
+2. Preserve existing functionality unless explicitly asked to remove it.
+3. Preserve `travel-data.json` compatibility.
+4. Never silently erase existing travel data.
+5. Never make browser localStorage the primary database.
+6. Never silently replace JSON during import.
+7. Keep the launcher dynamic-port behavior.
+8. Keep no-cache local serving.
+9. Keep EnglishLatin label preference.
+10. Keep mountain labels.
+11. Keep EditDelete visible.
+12. Keep independent sidebarmap layout.
+13. Keep country groupingcountscollapse.
+14. Keep safe automatic saves.
+15. Keep KML export.
+16. Keep Profile fields.
+17. Verify that `server.py` preserves all top-level JSON fields that the frontend needs.
+18. Test JavaScript syntax before packaging.
+19. Package all required files into a ZIP.
+20. Clearly state that the user's existing populated `travel-data.json` should be retained when upgrading.
+
+---
+
+# 39. Regression checklist
+
+Before delivering a new version, verify all of these.
+
+### Launch
+
+- `.command` starts successfully.
+- Correct version opens.
+- Old server on 8765 does not interfere.
+- Correct application folder is served.
+
+### Map
+
+- OpenFreeMap loads.
+- map panszooms.
+- map styles work.
+- EnglishLatin labels work where data allows.
+- mountain names appear.
+- city search works.
+- country search works.
+
+### Selection
+
+- city labels can be selected.
+- mountain labels can be selected.
+- POIs can be selected.
+- administrative polygons do not unnecessarily override named features.
+
+### Data
+
+- existing `travel-data.json` loads.
+- Add writes JSON.
+- Edit writes JSON.
+- Delete writes JSON.
+- Profile writes JSON.
+- profile survives restart.
+- notes survive restart.
+
+### Sidebar
+
+- countries grouped.
+- country counts correct.
+- A–Z works.
+- Z–A works.
+- collapse works.
+- expand works.
+- list scroll does not resize map.
+
+### Import
+
+- Merge works.
+- duplicates skipped.
+- Replace gives warning.
+- Replace creates backup first.
+- Cancel changes nothing.
+
+### Export
+
+- JSON backup works.
+- KML works.
+- KML imports into Google My Maps.
+
+### Failure handling
+
+- server-write failure is visible.
+- failed save does not falsely appear committed.
+
+---
+
+# 40. Current project priority
+
+The priority is NOT adding many new features.
+
+The priority is making the application a dependable personal travel database with
+
+accurate map selection + safe local persistence + easy browsing of a large travel history.
+
+Reliability and preservation of the user's accumulated travel data are more important than visual novelty.
+
+---
+
+# 41. Starting point for the next project
+
+When continuing this project in a new ChatGPTCodex project
+
+1. Upload the latest v7 ZIP.
+2. Upload the user's CURRENT populated `travel-data.json` separately if development requires testing against real data.
+3. Treat that JSON as irreplaceable user data.
+4. Extract and inspect the actual source before modifying it.
+5. Use this context as the requirementshistory document.
+6. Increment the version number for meaningful releases.
+7. Run regression checks before returning a new ZIP.
+
+Current baseline
+
+My Travel Map v7 — OpenFreeMap  MapLibre  local JSON  improved feature selection  profile support.
+---
+
+# 42. v8 update (27 Sep 2026) — CURRENT BASELINE
+
+Current version: My Travel Map v8. Package: `My_Travel_Map_v8.zip` (folder `My_Travel_Map_v8/`).
+v8 is a reliability + selection-accuracy release built from v7 against this document. All v7 behaviour retained.
+
+Package changes
+- Package does NOT ship travel-data.json (server creates it on first save) — upgrades can no longer overwrite user data.
+- MapLibre GL JS 5.24.0 bundled in ./lib (no unpkg). Upgrade deliberately, not by CDN drift.
+- Windows launcher added: "Launch My Travel Map (Windows).bat" (Mac .command remains primary).
+
+Server (server.py)
+- GET /api/data returns X-Data-Revision (sha1 of file). POST must send baseRevision; mismatch → 409 "stale" (protects against an old tab overwriting newer data).
+- Never overwrites a travel-data.json it cannot parse (409, UI shows error).
+- Preserves ALL existing top-level fields and extra profile fields; validates place coordinates.
+- fsync + atomic replace; write lock; path-traversal guard; /api/info endpoint; --no-browser flag.
+
+Frontend
+- All mutations go through one commit() path: apply → POST → confirm → mirror to localStorage ONLY after success; rollback + clear error otherwise.
+- Selection: country/state/province/continent place labels excluded; candidates ranked by type score minus 6 pts/px distance from click (12 px radius); "What did you mean?" chooser when distinct good candidates are within 290 pts of the best; "None of these" → clicked spot + reverse geocode. Add dialog shows what was selected.
+- Map clicks on markers/popups/controls, or clicks that close a popup, no longer open Add.
+- Popups built with DOM (no inline onclick). Nominatim throttled to 1 req/s with timeout.
+- Filter hides markers too; "My places" fits filtered set; Collapse all/Expand all; notes preview in list; map style remembered; country grouping case-insensitive (most common spelling shown).
+- Merge duplicate = same id, or same normalised name (+ same/blank country) within 1 km. Sync browser→JSON downloads a backup first.
+
+Tests run before release: 14 server checks + 41 end-to-end browser checks (Playwright, stubbed tiles/Nominatim) — all passed. Not yet verified on real OpenFreeMap tiles or with the user's populated travel-data.json.
+
+# 43. v8.1 update (27 Sep 2026) — CURRENT BASELINE
+
+- Interface dark mode: Theme select (Auto / Light / Dark) beside Profile; stored in localStorage (UI preference, not travel data); applied before first paint; MapLibre controls/popups themed. Map style remains a separate choice.
+- Search results drawn on the map: Nominatim polygon_geojson outline (fill + dashed line, under labels) or a halo circle for point results, plus pin + name label with "+ Add" (prefills name/country/coords) and ✕. Survives map-style changes; replaced by the next search.
+- New/edited places get createdAt / updatedAt (user's data already had these on 49 places).
+- Sync browser → JSON is offered only when the browser copy contains places the file lacks; an older subset is silently refreshed from the file (prevents offering to overwrite a newer, dropped-in travel-data.json).
+- JSON format version stays 8; app build "8.1" shown in UI/Terminal.
+- Tested: 14 server + 43 regression + 23 new checks, including against the user's real 289-place / 20-country travel-data.json (read-only copy).
+
+# 44. v8.2 update (10 Oct 2026) — WHERE I WANT TO GO — CURRENT BASELINE
+
+- Each place has "status": "been" | "want". Missing status = "been" (all pre-8.2 data); normalised on load, written on next save.
+- Sidebar tabs: Been here (n) / Want to go (n) / Both (remembered, localStorage). Both = two sections ("Where I've been" blue, "Where I want to go" orange), each country-grouped with own counts; collapse keys: been = plain country name (v7-compatible), want = "want::<country>". Map shows only markers for the active tab (+ filter).
+- Markers: been #1769e0 blue, want #f08c00 orange. Search result recoloured purple (#7c3aed / dark #a78bfa) to avoid clash.
+- Add/Edit dialog: Been here / Want to go radio; new places default to the active tab; saving into a hidden tab switches view to Both.
+- "✓ Been" (list) and "✓ I've been here" (popup) move a want place to been.
+- KML: two Folders + blue/orange styles + "status" ExtendedData column.
+- Tested: 14 server + 43 regression + 44 real-data checks (user's 305-place file, read-only copy).

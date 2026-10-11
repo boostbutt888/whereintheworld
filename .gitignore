@@ -1,0 +1,13 @@
+# Personal data - never commit (kept only in your local folder)
+travel-data.json
+travel-data.json.tmp
+my-travel-map-*.json
+my-travel-map-*.kml
+
+# Python / OS / editor clutter
+__pycache__/
+*.pyc
+.DS_Store
+Thumbs.db
+desktop.ini
+*.zip
