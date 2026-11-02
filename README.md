@@ -22,7 +22,9 @@ Requires Python 3.7+. The app opens at `http://127.0.0.1:8765/` (or another free
 
 ## Put the online edition up
 
-Follow [`online/SETUP-GUIDE.txt`](online/SETUP-GUIDE.txt): create a free Supabase project, run `online/supabase-setup.sql`, turn on Google sign-in, put your Project URL and anon/publishable key in `online/site/config.js`, then drag `online/site/` onto Netlify Drop. Move your desktop data across with **Import → Merge** of `travel-data.json`.
+**Live address (GitHub Pages):** https://boostbutt888.github.io/whereintheworld/ — published automatically from `online/site/` by `.github/workflows/pages.yml` on every push to `main`.
+
+Follow [`online/SETUP-GUIDE.txt`](online/SETUP-GUIDE.txt) (GitHub Pages steps are at the end): create a free Supabase project, run `online/supabase-setup.sql`, turn on Google sign-in, put your Project URL and anon/publishable key in `online/site/config.js`, then drag `online/site/` onto Netlify Drop. Move your desktop data across with **Import → Merge** of `travel-data.json`.
 
 ## Features
 

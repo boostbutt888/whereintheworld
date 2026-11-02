@@ -168,3 +168,29 @@ How safety is preserved from the desktop version
  - Places are no longer copied into browser storage (important on shared
    computers). Only display preferences (theme, map style, tab, collapsed
    countries) are kept in the browser.
+
+
+=====================================================================
+ALTERNATIVE TO STEP 3 — HOST ON GITHUB PAGES INSTEAD OF NETLIFY
+=====================================================================
+The repository already contains .github/workflows/pages.yml, which
+publishes online/site to GitHub Pages every time you push to main.
+
+ 1. GitHub Pages is free only for PUBLIC repositories (private needs a
+    paid GitHub plan). Nothing private is in the repository: your
+    travel-data.json is git-ignored, and the Supabase anon/publishable
+    key in config.js is public by design (RLS protects each user's data).
+    Repo → Settings → General → Danger Zone → Change visibility → Public.
+ 2. Repo → Settings → Pages → Build and deployment → Source:
+    "GitHub Actions".
+ 3. Repo → Actions → "Deploy online edition to GitHub Pages" →
+    Run workflow (later pushes deploy automatically).
+ 4. Your address is:  https://<github-username>.github.io/<repo-name>/
+    e.g.             https://boostbutt888.github.io/whereintheworld/
+    Use it as YOUR-SITE in Step 5 (Supabase URL Configuration):
+      Site URL:      https://boostbutt888.github.io/whereintheworld
+      Redirect URLs: https://boostbutt888.github.io/whereintheworld/**
+ 5. Fill in online/site/config.js, commit and push — the site redeploys
+    in about a minute. GitHub Pages caches pages for up to 10 minutes,
+    so after an update press Ctrl+F5 (Mac: Cmd+Shift+R) if you still
+    see the old version. (netlify.toml is ignored on GitHub Pages.)
