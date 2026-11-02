@@ -1,0 +1,1065 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>My Travel Map</title>
+<meta name="description" content="Record the places you have been and the places you want to go, on a free world map.">
+<script>/* apply saved interface theme before first paint */
+(function(){var t="auto";try{t=JSON.parse(localStorage.getItem("myTravelMap.theme.v1"))||"auto"}catch(e){}
+var d=t==="dark"||(t==="auto"&&window.matchMedia&&matchMedia("(prefers-color-scheme: dark)").matches);
+document.documentElement.setAttribute("data-theme",d?"dark":"light");})();</script>
+<!-- MapLibre GL JS 5.24.0 is bundled in ./lib so the app never picks up an untested release. -->
+<link href="lib/maplibre-gl.css" rel="stylesheet">
+<script src="lib/maplibre-gl.js"></script>
+<!-- supabase-js 2.117.3 bundled in ./lib (sign-in + per-user storage). -->
+<script src="lib/supabase.js"></script>
+<script src="config.js"></script>
+<style>
+:root{
+ --bg:#ffffff;--panel:#ffffff;--panel2:#f7f8fa;--hover:#f1f3f5;--hover2:#eef1f4;--line:#d9dee5;--line2:#edf0f3;
+ --text:#17202a;--text2:#46515c;--muted:#68727d;--input:#ffffff;--inputLine:#cbd2da;
+ --blue:#1769e0;--blueHover:#125bc4;--red:#b42318;--green:#067647;--shade:#0006;--shadow:#0005;
+ --search:#7c3aed;--been:#1769e0;--want:#f08c00;--wantText:#b35c00;--wantBg:#fff4e5;--beenBg:#eaf2fd;color-scheme:light}
+html[data-theme="dark"]{
+ --bg:#12161b;--panel:#1a1f26;--panel2:#222932;--hover:#262e38;--hover2:#2b3440;--line:#323b46;--line2:#29313b;
+ --text:#e6eaef;--text2:#b9c2cc;--muted:#8d97a3;--input:#141920;--inputLine:#3a4552;
+ --blue:#4a8df0;--blueHover:#3b7ddf;--red:#ff7b72;--green:#5fd08f;--shade:#000a;--shadow:#000c;
+ --search:#a78bfa;--been:#4a8df0;--want:#ffa94d;--wantText:#ffb870;--wantBg:#33261a;--beenBg:#1c2a3d;color-scheme:dark}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0;overflow:hidden;font:14px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:var(--text);background:var(--bg)}
+#app{height:100vh;height:100dvh;min-height:0;display:grid;grid-template-columns:360px minmax(0,1fr);grid-template-rows:minmax(0,1fr);overflow:hidden}
+#sidebar{background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column;min-width:0;min-height:0;height:100%;overflow:hidden;z-index:2}
+header{padding:14px;border-bottom:1px solid var(--line)}
+h1{font-size:20px;margin:0 0 4px}.ver{font-size:10px;font-weight:700;color:var(--muted);vertical-align:middle}
+.sub{font-size:12px;color:var(--muted);line-height:1.35}
+.search{display:flex;gap:6px;margin-top:10px}.search input{flex:1;min-width:0}
+input,textarea,button,select{font:inherit;border:1px solid var(--inputLine);border-radius:8px;padding:8px;background:var(--input);color:var(--text)}
+input::placeholder,textarea::placeholder{color:var(--muted)}
+button{cursor:pointer}button:hover{background:var(--hover)}button:disabled{opacity:.5;cursor:default}
+.primary{background:var(--blue);color:#fff;border-color:var(--blue)}.primary:hover{background:var(--blueHover)}
+.toolbar{display:flex;gap:6px;padding:8px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+#placeList{flex:1 1 auto;min-height:0;overflow-y:auto;overflow-x:hidden;padding:7px;-webkit-overflow-scrolling:touch}
+.emptyList{padding:18px 10px;color:var(--muted);font-size:13px;line-height:1.45}
+.countryGroup{border-bottom:1px solid var(--line2)}
+.countryHeader{width:100%;border:0;border-radius:0;background:var(--panel2);padding:9px 10px;display:flex;align-items:center;gap:7px;text-align:left;font-weight:700;position:sticky;top:0;z-index:1}
+.countryHeader:hover{background:var(--hover2)}
+.countryArrow{display:inline-block;width:14px;font-size:11px;color:var(--muted)}
+.countryName{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.countryCount{font-size:12px;color:var(--muted);font-weight:600}
+.countryItems{padding:3px 4px 6px}.countryItems.collapsed{display:none}
+.place{padding:7px 9px;border-radius:8px;cursor:pointer;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center}
+.place:hover{background:var(--hover)}.place b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.placeNote{font-size:12px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:1px}
+.placeActions{display:flex;gap:4px}.miniBtn{padding:5px 7px;font-size:12px;border-radius:6px}.miniDanger{color:var(--red)}
+.footer{padding:8px;border-top:1px solid var(--line);display:grid;grid-template-columns:1fr 1fr 1fr;gap:7px}#fileInput{display:none}
+#mapWrap{position:relative;min-width:0;min-height:0;height:100%;overflow:hidden}
+#map{position:absolute;inset:0}
+#status{font-size:11px;color:var(--muted);margin-top:6px;min-height:14px}
+#status.err{color:var(--red);font-weight:600}
+#dataStatus{margin-top:6px;font-size:11px;color:var(--text2)}
+#dataStatus.ok{color:var(--green)}#dataStatus.err{color:var(--red);font-weight:600}
+.modalShade{position:fixed;inset:0;background:var(--shade);display:none;align-items:center;justify-content:center;z-index:20;padding:15px}
+.modal{width:min(440px,100%);max-height:calc(100vh - 30px);overflow:auto;background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:12px;padding:16px;box-shadow:0 20px 60px var(--shadow)}
+.modal h2{margin:0 0 12px}.field{margin:9px 0}.field label{display:block;font-size:12px;color:var(--muted);margin-bottom:4px}
+.field input,.field textarea{width:100%}.field textarea{height:90px;resize:vertical}
+.field input[readonly]{color:var(--muted)}
+.actions{display:flex;justify-content:flex-end;gap:7px;margin-top:12px}.danger{color:var(--red);margin-right:auto}
+.importChoices,.choiceList{display:grid;gap:8px;margin-top:12px}
+.importChoices button,.choiceList button{text-align:left;padding:10px 11px}
+.importChoices small,.choiceList small{display:block;color:var(--muted);margin-top:3px;font-size:12px}
+.popupName{font-weight:700;font-size:15px}.popupCountry{color:var(--muted);margin-top:2px}.popupNotes{margin-top:7px;white-space:pre-wrap;max-width:260px}
+.popupActions{display:flex;gap:6px;margin-top:9px}.popupActions button{padding:5px 8px;font-size:12px}
+.styleBox{position:absolute;top:10px;right:10px;z-index:3;background:var(--panel);border-radius:8px;padding:4px;box-shadow:0 1px 5px var(--shadow)}
+.styleBox select{border:0;background:var(--panel);padding:4px}
+.profileSummary{margin-top:8px;display:flex;align-items:center;gap:7px}
+.profileSummary button,.profileSummary select{padding:5px 8px;font-size:12px}
+#themeSelect{margin-left:auto}
+#profileText{font-size:12px;color:var(--text2);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hint{font-size:11px;color:var(--muted);margin-top:4px}
+.marker-hidden{display:none!important}
+/* Been here / Want to go */
+.viewTabs{display:grid;grid-template-columns:1fr 1fr auto;gap:0;padding:8px 8px 0}
+.viewTabs button{border-radius:0;padding:7px 8px;font-size:12.5px;font-weight:600;white-space:nowrap;border-bottom-width:3px}
+.viewTabs button:first-child{border-radius:8px 0 0 8px}.viewTabs button:last-child{border-radius:0 8px 8px 0}
+.viewTabs button+button{border-left:0}
+.viewTabs button.on[data-view="been"]{background:var(--beenBg);border-bottom-color:var(--been);color:var(--been)}
+.viewTabs button.on[data-view="want"]{background:var(--wantBg);border-bottom-color:var(--want);color:var(--wantText)}
+.viewTabs button.on[data-view="both"]{background:var(--hover2);border-bottom-color:var(--text2)}
+.dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:5px;vertical-align:0}
+.dot.been{background:var(--been)}.dot.want{background:var(--want)}
+.sectionHead{display:flex;align-items:baseline;gap:8px;margin:10px 4px 4px;padding:6px 8px;border-radius:8px;font-weight:800;font-size:13px;letter-spacing:.02em;text-transform:uppercase}
+.sectionHead small{font-weight:600;text-transform:none;letter-spacing:0;color:var(--muted);font-size:12px}
+.sectionHead.been{background:var(--beenBg);color:var(--been)}
+.sectionHead.want{background:var(--wantBg);color:var(--wantText)}
+.section:first-child .sectionHead{margin-top:2px}
+.section.want .countryHeader .countryCount{color:var(--wantText)}
+.place.been{box-shadow:inset 3px 0 0 var(--been)}.place.want{box-shadow:inset 3px 0 0 var(--want)}
+.statusChoice{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.statusChoice label{display:flex;align-items:center;gap:7px;border:1px solid var(--inputLine);border-radius:8px;padding:8px 10px;cursor:pointer;font-size:14px;color:var(--text);margin:0}
+.statusChoice input{margin:0;accent-color:var(--blue)}
+.statusChoice label:has(input:checked){border-width:2px;padding:7px 9px}
+.statusChoice label.been:has(input:checked){border-color:var(--been);background:var(--beenBg)}
+.statusChoice label.want:has(input:checked){border-color:var(--want);background:var(--wantBg)}
+.statusChip{display:inline-block;font-size:11px;font-weight:700;border-radius:999px;padding:2px 8px;margin-top:6px}
+.statusChip.been{background:var(--beenBg);color:var(--been)}.statusChip.want{background:var(--wantBg);color:var(--wantText)}
+.popupActions .beenBtn{border-color:var(--been);color:var(--been);font-weight:700}
+/* MapLibre widgets follow the interface theme */
+.maplibregl-popup-content{border-radius:10px;padding:12px 14px;background:var(--panel);color:var(--text);box-shadow:0 2px 12px var(--shadow)}
+.maplibregl-popup-close-button{color:var(--muted);font-size:18px;padding:0 6px}
+.maplibregl-popup-anchor-top .maplibregl-popup-tip,.maplibregl-popup-anchor-top-left .maplibregl-popup-tip,.maplibregl-popup-anchor-top-right .maplibregl-popup-tip{border-bottom-color:var(--panel)}
+.maplibregl-popup-anchor-bottom .maplibregl-popup-tip,.maplibregl-popup-anchor-bottom-left .maplibregl-popup-tip,.maplibregl-popup-anchor-bottom-right .maplibregl-popup-tip{border-top-color:var(--panel)}
+.maplibregl-popup-anchor-left .maplibregl-popup-tip{border-right-color:var(--panel)}
+.maplibregl-popup-anchor-right .maplibregl-popup-tip{border-left-color:var(--panel)}
+html[data-theme="dark"] .maplibregl-ctrl-group{background:var(--panel2);box-shadow:0 0 0 1px var(--line)}
+html[data-theme="dark"] .maplibregl-ctrl-group button+button{border-top-color:var(--line)}
+html[data-theme="dark"] .maplibregl-ctrl-group button .maplibregl-ctrl-icon{filter:invert(1) hue-rotate(180deg)}
+html[data-theme="dark"] .maplibregl-ctrl-scale{background:#1a1f26cc;color:var(--text);border-color:var(--text2)}
+html[data-theme="dark"] .maplibregl-ctrl-attrib{background:#1a1f26cc;color:var(--text2)}
+html[data-theme="dark"] .maplibregl-ctrl-attrib a{color:var(--text2)}
+html[data-theme="dark"] .maplibregl-ctrl-attrib-button{filter:invert(1)}
+/* Search result: pin + name label on the map */
+.searchPin{display:flex;flex-direction:column;align-items:center;pointer-events:none}
+.searchLabel{pointer-events:auto;display:flex;align-items:center;gap:6px;max-width:260px;background:var(--panel);color:var(--text);border:2px solid var(--search);border-radius:8px;padding:4px 4px 4px 9px;font-weight:700;font-size:13px;box-shadow:0 2px 8px var(--shadow);white-space:nowrap}
+.searchLabel span{overflow:hidden;text-overflow:ellipsis}
+.searchLabel button{padding:2px 7px;font-size:12px;border-radius:6px;font-weight:600}
+.searchLabel .addBtn{background:var(--search);border-color:var(--search);color:#fff}
+.searchStem{width:2px;height:12px;background:var(--search)}
+.searchDot{width:16px;height:16px;border-radius:50%;background:var(--search);border:3px solid #fff;box-shadow:0 0 0 2px var(--search),0 1px 4px #0006}
+.account{display:flex;align-items:center;gap:6px;margin-top:6px;font-size:11px;color:var(--muted)}
+.account span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0}
+.account button{padding:3px 8px;font-size:11px}
+#signinShade{display:none;z-index:40;background:var(--bg)}
+#signinShade .modal{max-width:380px;text-align:center}
+#signinShade h2{font-size:22px;margin-bottom:6px}
+#signinShade .sub{font-size:13px;margin-bottom:18px}
+.googleBtn{display:inline-flex;align-items:center;justify-content:center;gap:10px;width:100%;padding:10px 14px;font-size:14px;font-weight:600;border-radius:8px;background:var(--input);border:1px solid var(--inputLine);color:var(--text);cursor:pointer}
+.googleBtn:hover{background:var(--hover)}
+.googleBtn svg{width:18px;height:18px;flex:none}
+#signinMsg{margin-top:12px;font-size:12px;min-height:16px}
+#signinMsg.err{color:var(--red);font-weight:600}
+.privacyNote{margin-top:16px;font-size:11px;color:var(--muted);line-height:1.4}
+@media(max-width:760px){
+ #app{grid-template-columns:1fr;grid-template-rows:minmax(0,42%) minmax(0,58%)}
+ #sidebar{border-right:0;border-bottom:1px solid var(--line)}
+}
+</style>
+</head>
+<body>
+<div id="app">
+<aside id="sidebar">
+<header>
+<h1>My Travel Map <span class="ver">v9 online</span></h1>
+<div class="sub">Free OpenFreeMap vector map. English/Latin labels. Your places are saved to your own private online account.</div>
+<div class="search"><input id="searchBox" placeholder="Search country, city, town or mountain"><button id="searchBtn" class="primary">Go</button><button id="clearSearchBtn" title="Remove the search result from the map" style="display:none">✕</button></div>
+<div id="status"></div>
+<div id="dataStatus">Connecting to your travel map…</div>
+<div class="account"><span id="accountText"></span><button id="signOutBtn" style="display:none">Sign out</button></div>
+<div class="profileSummary">
+  <button id="profileBtn">Profile</button>
+  <div id="profileText">No profile set</div>
+  <select id="themeSelect" title="Interface theme">
+    <option value="auto">Theme: Auto</option>
+    <option value="light">Theme: Light</option>
+    <option value="dark">Theme: Dark</option>
+  </select>
+</div>
+</header>
+<div class="viewTabs" id="viewTabs" role="tablist" aria-label="Which places to show">
+<button data-view="been" title="Places I have been"><span class="dot been"></span>Been here <span id="beenCount"></span></button>
+<button data-view="want" title="Places I want to go"><span class="dot want"></span>Want to go <span id="wantCount"></span></button>
+<button data-view="both" title="Show both lists">Both</button>
+</div>
+<div class="toolbar">
+<button id="worldBtn">World</button><button id="placesBtn" title="Zoom to saved places (or to the filtered places)">My places</button>
+<select id="countrySort" title="Country sort order">
+  <option value="az">Country A–Z</option>
+  <option value="za">Country Z–A</option>
+</select>
+<button id="collapseAllBtn" title="Collapse or expand every country">Collapse all</button>
+<input id="filterBox" placeholder="Filter saved places (name, country, notes)" style="flex:1;min-width:140px">
+</div>
+<div id="placeList"></div>
+<div class="footer">
+<button id="exportBtn">Backup JSON</button><button id="kmlBtn">Google KML</button><button id="importBtn">Import</button>
+<input id="fileInput" type="file" accept=".json,application/json">
+</div>
+</aside>
+<main id="mapWrap">
+<div id="map"></div>
+<div class="styleBox"><select id="styleSelect" title="Map style">
+<option value="liberty">Roads — Liberty</option>
+<option value="bright">Roads — Bright</option>
+<option value="positron">Light</option>
+<option value="dark">Dark</option>
+<option value="fiord">Fiord</option>
+</select></div>
+</main>
+</div>
+
+<!-- Add / edit place -->
+<div id="modalShade" class="modalShade">
+<div class="modal">
+<h2 id="modalTitle">Add place</h2>
+<div class="field"><label>List</label><div class="statusChoice">
+<label class="been"><input type="radio" name="placeStatus" value="been"><span class="dot been"></span>Been here</label>
+<label class="want"><input type="radio" name="placeStatus" value="want"><span class="dot want"></span>Want to go</label></div></div>
+<div class="field"><label>Place name</label><input id="nameInput"></div>
+<div class="field"><label>Country</label><input id="countryInput"></div>
+<div class="field"><label>Notes</label><textarea id="notesInput"></textarea></div>
+<div class="field"><label>Coordinates</label><input id="coordsInput" readonly><div id="pickSource" class="hint"></div></div>
+<div class="actions"><button id="deleteBtn" class="danger">Delete</button><button id="cancelBtn">Cancel</button><button id="saveBtn" class="primary">Save</button></div>
+</div>
+</div>
+
+<!-- Sign in -->
+<div id="signinShade" class="modalShade">
+<div class="modal">
+<h2>My Travel Map</h2>
+<div class="sub">Pin the places you have been and the places you want to go, on a free world map. Sign in to keep your own private travel map — available from any browser.</div>
+<button id="googleSignInBtn" class="googleBtn"><svg viewBox="0 0 48 48" aria-hidden="true"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/></svg>Sign in with Google</button>
+<div id="signinMsg"></div>
+<div class="privacyNote">Your places and profile are stored privately for your account; other users cannot see them. Map: OpenFreeMap / OpenStreetMap. Place search: OpenStreetMap Nominatim.</div>
+</div>
+</div>
+
+<!-- What did you mean? -->
+<div id="chooserShade" class="modalShade">
+<div class="modal">
+<h2>What did you mean?</h2>
+<div class="sub">Several places are labelled near where you clicked.</div>
+<div id="choiceList" class="choiceList"></div>
+<div class="actions"><button id="chooserCancelBtn">Cancel</button></div>
+</div>
+</div>
+
+<!-- Profile -->
+<div id="profileShade" class="modalShade">
+  <div class="modal">
+    <h2>Profile</h2>
+    <div class="field"><label>Name</label><input id="profileNameInput" placeholder="Your name"></div>
+    <div class="field"><label>Year of birth</label><input id="profileBirthInput" inputmode="numeric" placeholder="e.g. 1971"></div>
+    <div class="sub">Saved in your online travel map together with your places. Only you can see it.</div>
+    <div class="actions"><button id="profileCancelBtn">Cancel</button><button id="profileSaveBtn" class="primary">Save profile</button></div>
+  </div>
+</div>
+
+<!-- Import -->
+<div id="importShade" class="modalShade">
+  <div class="modal">
+    <h2>Import travel data</h2>
+    <div id="importSummary" class="sub"></div>
+    <div class="importChoices">
+      <button id="mergeImportBtn"><b>Merge with existing</b><small>Keeps your current places and adds the imported ones. Duplicates are skipped.</small></button>
+      <button id="replaceImportBtn"><b>Replace all</b><small>Downloads a backup of your current data first, then replaces everything in your online travel map.</small></button>
+      <button id="cancelImportBtn">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<script>
+"use strict";
+const APP_VERSION=8;      // travel-data.json format version
+const BUILD="9.0 online";  // app build shown in the UI
+const $=id=>document.getElementById(id);
+const COLLAPSE_KEY="myTravelMap.countryCollapsed.v1";
+const STYLE_KEY="myTravelMap.mapStyle.v1";
+const THEME_KEY="myTravelMap.theme.v1";
+const VIEW_KEY="myTravelMap.listView.v1";
+const STATUS={been:{label:"Been here",section:"Where I've been",color:"#1769e0"},want:{label:"Want to go",section:"Where I want to go",color:"#f08c00"}};
+const statusOf=p=>p&&p.status==="want"?"want":"been";   // places saved before v8.2 have no status → "been"
+const WORLD={center:[10,20],zoom:1.7};
+
+/* ---------- small utilities ---------- */
+const ls={
+ get(k,def){try{const v=localStorage.getItem(k);return v==null?def:JSON.parse(v)}catch{return def}},
+ set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch{}}
+};
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const newId=()=>crypto.randomUUID?crypto.randomUUID():Date.now().toString(36)+"-"+Math.random().toString(36).slice(2);
+const clone=o=>JSON.parse(JSON.stringify(o));
+const cleanProfile=p=>(p&&typeof p==="object")?{name:String(p.name||""),yearOfBirth:String(p.yearOfBirth||"")}:{name:"",yearOfBirth:""};
+function setStatus(msg,isErr=false,clearAfter=0){
+ const el=$("status");el.textContent=msg;el.className=isErr?"err":"";
+ if(clearAfter)setTimeout(()=>{if(el.textContent===msg){el.textContent="";el.className=""}},clearAfter);
+}
+function setDataStatus(msg,kind=""){const el=$("dataStatus");el.textContent=msg;el.className=kind}
+function kmBetween(a,b){
+ const R=6371,toR=Math.PI/180,dLat=(b.lat-a.lat)*toR,dLng=(b.lng-a.lng)*toR;
+ const h=Math.sin(dLat/2)**2+Math.cos(a.lat*toR)*Math.cos(b.lat*toR)*Math.sin(dLng/2)**2;
+ return 2*R*Math.asin(Math.sqrt(h));
+}
+
+/* ---------- state ---------- */
+let places=[];
+let profile={name:"",yearOfBirth:""};
+let revision=null;          // revision of the online travel map we last read/wrote
+let connected=false;        // true when signed in and the online travel map loaded
+let sb=null, currentUser=null;
+let editingId=null, pendingCoords=null, dialogToken=0;
+let collapsedCountries=new Set(ls.get(COLLAPSE_KEY,[]));
+const markerObjs=new Map();
+function saveCollapsedCountries(){ls.set(COLLAPSE_KEY,[...collapsedCountries])}
+
+function normalizePlace(p){
+ if(!p||typeof p!=="object")return null;
+ const lat=Number(p.lat),lng=Number(p.lng);
+ if(!Number.isFinite(lat)||!Number.isFinite(lng)||Math.abs(lat)>90||Math.abs(lng)>180)return null;
+ return {...p,id:p.id!=null&&p.id!==""?String(p.id):newId(),name:String(p.name??"").trim()||"Unnamed",
+   country:String(p.country??"").trim(),notes:String(p.notes??""),lat,lng,status:statusOf(p)};
+}
+function normalizePlaces(arr){return (Array.isArray(arr)?arr:[]).map(normalizePlace).filter(Boolean)}
+
+/* ---------- online storage (Supabase) ----------
+   Each signed-in person has ONE row in public.travel_maps holding the same JSON
+   structure as the desktop app's travel-data.json. Row Level Security on the
+   server guarantees a person can only read/write their own row. */
+let extraTopLevel={};       // unknown top-level fields from older/newer files are preserved
+function dbObject(){return {...extraTopLevel,app:"My Travel Map",version:APP_VERSION,profile,places}}
+
+async function saveOnline(){
+ if(!sb||!currentUser)return {ok:false,error:"You are signed out. Sign in again and retry."};
+ try{
+  const {data,error}=await sb.rpc("save_travel_map",{p_data:dbObject(),p_base_revision:revision??0});
+  if(!error){revision=Number(data);return {ok:true}}
+  const m=String(error.message||error.details||"Save failed");
+  const stale=/stale/i.test(m)||error.code==="40001"||error.code==="23505";
+  if(/Failed to fetch|NetworkError|Load failed|network/i.test(m))return {ok:false,error:"Could not reach the server — check your internet connection and try again."};
+  if(/JWT|not signed in|401/i.test(m))return {ok:false,error:"Your sign-in has expired. Reload the page and sign in again."};
+  return {ok:false,stale,error:stale?"Your travel map was changed in another tab or on another device since this page loaded.":m};
+ }catch(e){
+  return {ok:false,error:"Could not reach the server — check your internet connection. ("+(e?.message||e)+")"};
+ }
+}
+
+function connectedStatus(extra=""){
+ const w=places.filter(p=>statusOf(p)==="want").length;
+ setDataStatus(`✓ Saved online — ${places.length} place${places.length===1?"":"s"} (${places.length-w} been · ${w} want to go)${extra} · My Travel Map v${BUILD}`,"ok");
+}
+
+/* Every change goes through commit(): apply → save online → wait for confirmation.
+   If the save fails, the change is rolled back and the reason is shown. */
+async function commit(mutate,what){
+ const beforePlaces=clone(places),beforeProfile={...profile};
+ if(!connected){
+  alert(`${what} was not saved: the app is not connected to your online travel map.\n\nReload the page and sign in.`);
+  return false;
+ }
+ mutate();
+ refresh();updateProfileSummary();
+ setStatus("Saving…");
+ const res=await saveOnline();
+ if(res.ok){
+  connectedStatus();
+  setStatus("Saved",false,1800);
+  return true;
+ }
+ places=beforePlaces;profile=beforeProfile;
+ refresh();updateProfileSummary();
+ setStatus("SAVE FAILED — nothing was changed",true);
+ if(res.stale){
+  setDataStatus("Your travel map was changed elsewhere — reload this page","err");
+  if(confirm(`${what} was not saved.\n\n${res.error}\n\nReload now to get the latest version?`))location.reload();
+ }else{
+  alert(`${what} was not saved, so it has been undone.\n\n${res.error}`);
+ }
+ return false;
+}
+
+async function loadData(){
+ connected=false;
+ setDataStatus("Loading your travel map…");
+ let row=null,error=null;
+ try{
+  ({data:row,error}=await sb.from("travel_maps").select("data,revision").eq("user_id",currentUser.id).maybeSingle());
+ }catch(e){error={message:String(e?.message||e)}}
+ if(error){
+  places=[];profile={name:"",yearOfBirth:""};
+  setDataStatus(`Cannot load your travel map: ${error.message}. Nothing will be saved until this is fixed — reload the page.`,"err");
+ }else{
+  connected=true;
+  revision=row?Number(row.revision):0;
+  const o=row&&row.data&&typeof row.data==="object"?row.data:{};
+  const {app:_a,version:_v,profile:_p,places:_pl,...rest}=Array.isArray(o)?{}:o;
+  extraTopLevel=rest;
+  places=normalizePlaces(Array.isArray(o)?o:o.places);
+  profile=Array.isArray(o)?{name:"",yearOfBirth:""}:cleanProfile(o.profile);
+  connectedStatus(row?"":" (new account)");
+ }
+ updateProfileSummary();
+ refresh();
+ if(places.length)fitPlaces(false);
+}
+
+/* ---------- sign in / sign out ---------- */
+function showSignIn(msg="",isErr=false){
+ $("signinShade").style.display="flex";
+ $("signinMsg").textContent=msg;$("signinMsg").className=isErr?"err":"";
+ $("signOutBtn").style.display="none";$("accountText").textContent="";
+ setDataStatus("Not signed in","err");
+}
+function showAccount(){
+ $("signinShade").style.display="none";
+ const md=currentUser.user_metadata||{};
+ $("accountText").textContent=`Signed in as ${md.full_name||md.name||""}${md.full_name||md.name?" · ":""}${currentUser.email||""}`;
+ $("accountText").title=currentUser.email||"";
+ $("signOutBtn").style.display="";
+}
+$("googleSignInBtn").onclick=async()=>{
+ if(!sb)return;
+ $("signinMsg").textContent="Opening Google…";$("signinMsg").className="";
+ const {error}=await sb.auth.signInWithOAuth({provider:"google",options:{redirectTo:location.origin+location.pathname}});
+ if(error)showSignIn("Sign-in failed: "+error.message,true);
+};
+$("signOutBtn").onclick=async()=>{
+ if(!confirm("Sign out of My Travel Map on this browser?"))return;
+ try{await sb.auth.signOut()}catch{}
+ location.reload();
+};
+
+async function startApp(){
+ const cfg=window.TRAVEL_MAP_CONFIG||{};
+ if(!window.supabase||!cfg.supabaseUrl||!cfg.supabaseAnonKey||/YOUR_/.test(cfg.supabaseUrl+cfg.supabaseAnonKey)){
+  showSignIn("This copy of the app has not been configured yet: fill in config.js (see SETUP-GUIDE).",true);
+  $("googleSignInBtn").disabled=true;
+  return;
+ }
+ sb=window.supabase.createClient(cfg.supabaseUrl,cfg.supabaseAnonKey,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true,flowType:"pkce"}});
+ // Show an error returned from Google/Supabase in the URL, if any.
+ const qs=new URLSearchParams(location.search+"&"+location.hash.slice(1));
+ const urlErr=qs.get("error_description")||qs.get("error");
+ let session=null;
+ try{({data:{session}}=await sb.auth.getSession())}catch{}
+ if(session?.user){
+  currentUser=session.user;
+  if(/[?&](code|error)=|#access_token|#error/.test(location.href))history.replaceState(null,"",location.pathname);
+  showAccount();
+  await loadData();
+ }else{
+  showSignIn(urlErr?("Sign-in failed: "+urlErr):"",!!urlErr);
+ }
+ sb.auth.onAuthStateChange((event,s)=>{
+  if(event==="SIGNED_OUT"){currentUser=null;connected=false;places=[];refresh();showSignIn()}
+  else if(s?.user&&currentUser&&s.user.id!==currentUser.id)location.reload();   // different account signed in in another tab
+ });
+}
+
+/* ---------- interface theme (Auto / Light / Dark) ---------- */
+const darkQuery=window.matchMedia?matchMedia("(prefers-color-scheme: dark)"):null;
+let themePref=ls.get(THEME_KEY,"auto");if(!["auto","light","dark"].includes(themePref))themePref="auto";
+function applyTheme(){
+ const dark=themePref==="dark"||(themePref==="auto"&&!!darkQuery?.matches);
+ document.documentElement.setAttribute("data-theme",dark?"dark":"light");
+}
+$("themeSelect").value=themePref;applyTheme();
+$("themeSelect").onchange=e=>{themePref=e.target.value;ls.set(THEME_KEY,themePref);applyTheme()};
+darkQuery?.addEventListener?.("change",()=>{if(themePref==="auto")applyTheme()});
+
+/* ---------- map ---------- */
+const styles={
+ liberty:"https://tiles.openfreemap.org/styles/liberty",
+ bright:"https://tiles.openfreemap.org/styles/bright",
+ positron:"https://tiles.openfreemap.org/styles/positron",
+ dark:"https://tiles.openfreemap.org/styles/dark",
+ fiord:"https://tiles.openfreemap.org/styles/fiord"
+};
+let styleKey=ls.get(STYLE_KEY,"liberty");if(!styles[styleKey])styleKey="liberty";
+$("styleSelect").value=styleKey;
+const map=new maplibregl.Map({container:"map",style:styles[styleKey],center:WORLD.center,zoom:WORLD.zoom,attributionControl:true});
+map.addControl(new maplibregl.NavigationControl(),"top-left");
+map.addControl(new maplibregl.ScaleControl({unit:"metric"}),"bottom-left");
+map.on("error",e=>{const m=String(e?.error?.message||"");if(/Failed to fetch|NetworkError|load/i.test(m))setStatus("Map tiles could not load — check the internet connection.",true,6000)});
+
+const LABEL_EXPR=["coalesce",["get","name:en"],["get","name:latin"],["get","name"]];
+function forceEnglishLabels(){
+ for(const layer of map.getStyle().layers||[]){
+  if(layer.type==="symbol"&&layer.layout&&layer.layout["text-field"]){
+   try{map.setLayoutProperty(layer.id,"text-field",LABEL_EXPR)}catch{}
+  }
+ }
+}
+function addMountainLabels(){
+ const style=map.getStyle();
+ const src=Object.entries(style.sources||{}).find(([,s])=>s.type==="vector")?.[0];
+ if(!src)return;
+ ["travel-mountain-peaks","travel-mountain-dots"].forEach(id=>{try{if(map.getLayer(id))map.removeLayer(id)}catch{}});
+ try{
+  map.addLayer({id:"travel-mountain-dots",type:"circle",source:src,"source-layer":"mountain_peak",minzoom:6,
+   paint:{"circle-radius":["interpolate",["linear"],["zoom"],6,2,12,3.5],"circle-stroke-width":1,"circle-color":"#5f6368","circle-stroke-color":"#ffffff"}});
+  map.addLayer({id:"travel-mountain-peaks",type:"symbol",source:src,"source-layer":"mountain_peak",minzoom:6,
+   layout:{"text-field":LABEL_EXPR,"text-font":["Noto Sans Regular"],"text-size":["interpolate",["linear"],["zoom"],6,10,10,12,14,13],
+    "text-offset":[0,1.0],"text-anchor":"top","text-optional":true,"symbol-sort-key":["case",["has","rank"],["get","rank"],100]},
+   paint:{"text-color":"#4a4d50","text-halo-color":"rgba(255,255,255,0.95)","text-halo-width":1.4}});
+ }catch(err){console.warn("Mountain label layer not available in this map style.",err)}
+}
+map.on("style.load",()=>{forceEnglishLabels();addMountainLabels();drawSearchArea()});
+$("styleSelect").onchange=e=>{styleKey=e.target.value;ls.set(STYLE_KEY,styleKey);map.setStyle(styles[styleKey])};
+
+/* ---------- markers ---------- */
+let lastPopupClose=0;
+function popupNode(p){
+ const d=document.createElement("div");const st=statusOf(p);
+ d.innerHTML=`<div class="popupName">${esc(p.name)}</div><div class="popupCountry">${esc(p.country||"")}</div>
+  <span class="statusChip ${st}">${STATUS[st].label}</span>
+  ${p.notes?`<div class="popupNotes">${esc(p.notes)}</div>`:""}
+  <div class="popupActions">${st==="want"?`<button data-act="been" class="beenBtn" title="Move to Where I've been">✓ I've been here</button>`:""}<button data-act="edit">Edit</button><button data-act="del" class="miniDanger">Delete</button></div>`;
+ d.querySelector('[data-act="edit"]').onclick=()=>{closePopups();openEdit(p.id)};
+ d.querySelector('[data-act="del"]').onclick=()=>{closePopups();deletePlaceById(p.id)};
+ const b=d.querySelector('[data-act="been"]');if(b)b.onclick=()=>{closePopups();markBeen(p.id)};
+ return d;
+}
+async function markBeen(id){
+ const p=places.find(x=>x.id===String(id));if(!p)return;
+ await commit(()=>{const q=places.find(x=>x.id===p.id);if(q)Object.assign(q,{status:"been",updatedAt:new Date().toISOString()})},`Moving "${p.name}" to Been here`);
+}
+function anyPopupOpen(){for(const m of markerObjs.values()){const pp=m.getPopup();if(pp&&pp.isOpen())return true}return false}
+function closePopups(){for(const m of markerObjs.values()){const pp=m.getPopup();if(pp&&pp.isOpen())pp.remove()}}
+function rebuildMarkers(){
+ for(const m of markerObjs.values())m.remove();
+ markerObjs.clear();
+ for(const p of places){
+  const popup=new maplibregl.Popup({offset:22,maxWidth:"300px"}).setDOMContent(popupNode(p));
+  popup.on("close",()=>{lastPopupClose=Date.now()});
+  const st=statusOf(p);
+  const m=new maplibregl.Marker({color:STATUS[st].color}).setLngLat([p.lng,p.lat]).setPopup(popup).addTo(map);
+  m.getElement().title=`${p.name} — ${STATUS[st].label}`;
+  m.getElement().classList.add("pin-"+st);
+  if(st==="want")m.getElement().style.zIndex="1";
+  markerObjs.set(p.id,m);
+ }
+ applyMarkerFilter();
+}
+let listView=ls.get(VIEW_KEY,"both");if(!["been","want","both"].includes(listView))listView="both";
+const inView=p=>listView==="both"||statusOf(p)===listView;
+function matchesFilter(p,q){return !q||`${p.name||""} ${p.country||""} ${p.notes||""}`.toLowerCase().includes(q)}
+function isShown(p,q=currentFilter()){return inView(p)&&matchesFilter(p,q)}
+function setView(v){
+ listView=v;ls.set(VIEW_KEY,v);
+ for(const b of document.querySelectorAll("#viewTabs button"))b.classList.toggle("on",b.dataset.view===v);
+ renderList();applyMarkerFilter();
+}
+for(const b of document.querySelectorAll("#viewTabs button"))b.onclick=()=>setView(b.dataset.view);
+function currentFilter(){return $("filterBox").value.trim().toLowerCase()}
+function applyMarkerFilter(){
+ const q=currentFilter();
+ for(const p of places){
+  const m=markerObjs.get(p.id);if(!m)continue;
+  const show=isShown(p,q);
+  m.getElement().classList.toggle("marker-hidden",!show);
+  if(!show){const pp=m.getPopup();if(pp&&pp.isOpen())pp.remove()}
+ }
+}
+
+/* ---------- sidebar list ---------- */
+const countryKey=p=>String(p.country||"").trim().replace(/\s+/g," ").toLowerCase();
+function countrySpellings(){
+ const tally=new Map();
+ for(const p of places){
+  const k=countryKey(p);if(!k)continue;const v=String(p.country).trim().replace(/\s+/g," ");
+  if(!tally.has(k))tally.set(k,new Map());const t=tally.get(k);t.set(v,(t.get(v)||0)+1);
+ }
+ const out=new Map();
+ for(const [k,t] of tally){
+  out.set(k,[...t.entries()].sort((a,b)=>b[1]-a[1]||(/^[A-Z]/.test(b[0])-/^[A-Z]/.test(a[0])))[0][0]);
+ }
+ return out;
+}
+// Collapse state: "Been" groups keep plain country names (compatible with v7/v8); "Want" groups are prefixed.
+const collapseKey=(st,country)=>st==="want"?"want::"+country:country;
+function renderList(){
+ const q=currentFilter();
+ const sortDir=$("countrySort").value||"az";
+ const nWant=places.filter(p=>statusOf(p)==="want").length,nBeen=places.length-nWant;
+ $("beenCount").textContent=`(${nBeen})`;$("wantCount").textContent=`(${nWant})`;
+ const list=$("placeList");list.innerHTML="";
+ if(!places.length){
+  list.innerHTML=`<div class="emptyList">No places yet.<br><br>Click a city, town, mountain or landmark on the map to add it — or use <b>Import</b> to load a travel-data.json file from the desktop app or a backup.</div>`;
+  $("collapseAllBtn").disabled=true;return;
+ }
+ const spell=countrySpellings();
+ const sections=listView==="both"?["been","want"]:[listView];
+ const frag=document.createDocumentFragment();
+ const allKeys=[];
+ let anyShown=false;
+ for(const st of sections){
+  const inSection=places.filter(p=>statusOf(p)===st);
+  const filtered=inSection.filter(p=>matchesFilter(p,q));
+  const sec=document.createElement("div");sec.className="section "+st;
+  const groups=new Map();
+  for(const p of filtered){
+   const c=spell.get(countryKey(p))||"Unknown / Unspecified";
+   if(!groups.has(c))groups.set(c,[]);groups.get(c).push(p);
+  }
+  const nCountries=new Set(inSection.map(p=>spell.get(countryKey(p))||"?")).size;
+  const head=document.createElement("div");head.className="sectionHead "+st;
+  head.innerHTML=`<span><span class="dot ${st}"></span>${STATUS[st].section}</span><small>${inSection.length} place${inSection.length===1?"":"s"} · ${nCountries} countr${nCountries===1?"y":"ies"}${q&&filtered.length!==inSection.length?` · ${filtered.length} match`:""}</small>`;
+  sec.appendChild(head);
+  if(!filtered.length){
+   const e=document.createElement("div");e.className="emptyList";
+   e.innerHTML=q?`No places here match “${esc(q)}”.`:(st==="want"
+    ?`Nothing on your list yet.<br>Click a place on the map (or search for it) and choose <b>Want to go</b>.`
+    :`No places yet. Click a place on the map and choose <b>Been here</b>.`);
+   sec.appendChild(e);frag.appendChild(sec);continue;
+  }
+  anyShown=true;
+  const countries=[...groups.keys()].sort((a,b)=>{const c=a.localeCompare(b,undefined,{sensitivity:"base"});return sortDir==="za"?-c:c});
+  for(const country of countries){
+   const key=collapseKey(st,country);allKeys.push(key);
+   const arr=groups.get(country).sort((a,b)=>(a.name||"").localeCompare(b.name||"",undefined,{sensitivity:"base"}));
+   const group=document.createElement("div");group.className="countryGroup";
+   const header=document.createElement("button");header.className="countryHeader";header.type="button";
+   const arrow=document.createElement("span");arrow.className="countryArrow";
+   const name=document.createElement("span");name.className="countryName";name.textContent=country;
+   const count=document.createElement("span");count.className="countryCount";count.textContent=`(${arr.length})`;
+   const items=document.createElement("div");items.className="countryItems";
+   const isCollapsed=!q&&collapsedCountries.has(key);   // while filtering, matches always show
+   if(isCollapsed)items.classList.add("collapsed");
+   arrow.textContent=isCollapsed?"▶":"▼";
+   header.onclick=()=>{
+    const collapsed=items.classList.toggle("collapsed");
+    arrow.textContent=collapsed?"▶":"▼";
+    collapsed?collapsedCountries.add(key):collapsedCountries.delete(key);
+    saveCollapsedCountries();updateCollapseAllLabel();
+   };
+   header.append(arrow,name,count);group.appendChild(header);
+   for(const p of arr){
+    const d=document.createElement("div");d.className="place "+st;
+    const info=document.createElement("div");info.style.minWidth="0";
+    const b=document.createElement("b");b.textContent=p.name||"Unnamed";info.appendChild(b);
+    if(p.notes){const n=document.createElement("div");n.className="placeNote";n.textContent=p.notes;info.appendChild(n)}
+    d.onclick=()=>{
+     map.flyTo({center:[p.lng,p.lat],zoom:Math.max(map.getZoom(),10)});
+     const m=markerObjs.get(p.id);if(m&&!m.getPopup().isOpen()){closePopups();m.togglePopup()}
+    };
+    const acts=document.createElement("div");acts.className="placeActions";
+    if(st==="want"){
+     const been=document.createElement("button");been.className="miniBtn";been.textContent="✓ Been";
+     been.title="I've been here — move to Where I've been";
+     been.onclick=e=>{e.stopPropagation();markBeen(p.id)};acts.appendChild(been);
+    }
+    const edit=document.createElement("button");edit.className="miniBtn";edit.textContent="Edit";
+    edit.onclick=e=>{e.stopPropagation();openEdit(p.id)};
+    const del=document.createElement("button");del.className="miniBtn miniDanger";del.textContent="Delete";
+    del.onclick=e=>{e.stopPropagation();deletePlaceById(p.id)};
+    acts.append(edit,del);d.append(info,acts);items.appendChild(d);
+   }
+   group.appendChild(items);sec.appendChild(group);
+  }
+  frag.appendChild(sec);
+ }
+ list.appendChild(frag);
+ currentKeys=allKeys;
+ $("collapseAllBtn").disabled=!anyShown;
+ updateCollapseAllLabel();
+}
+let currentKeys=[];
+function updateCollapseAllLabel(){
+ $("collapseAllBtn").textContent=currentKeys.length&&currentKeys.every(k=>collapsedCountries.has(k))?"Expand all":"Collapse all";
+}
+// Full refresh after data changes; the filter box only re-renders the list and toggles markers.
+function refresh(){renderList();rebuildMarkers()}
+$("filterBox").oninput=()=>{renderList();applyMarkerFilter()};
+$("countrySort").onchange=renderList;
+$("collapseAllBtn").onclick=()=>{
+ const allCollapsed=currentKeys.every(k=>collapsedCountries.has(k));
+ for(const k of currentKeys)allCollapsed?collapsedCountries.delete(k):collapsedCountries.add(k);
+ saveCollapsedCountries();renderList();
+};
+
+function fitPlaces(animate=true){
+ const q=currentFilter();
+ const pts=places.filter(p=>isShown(p,q));
+ if(!pts.length){map.flyTo(WORLD);return}
+ if(pts.length===1){map.flyTo({center:[pts[0].lng,pts[0].lat],zoom:10});return}
+ const b=new maplibregl.LngLatBounds();pts.forEach(p=>b.extend([p.lng,p.lat]));
+ map.fitBounds(b,{padding:55,maxZoom:11,animate});
+}
+
+/* ---------- add / edit / delete ---------- */
+function setDialogStatus(st){for(const r of document.querySelectorAll('input[name="placeStatus"]'))r.checked=r.value===st}
+function dialogStatus(){return document.querySelector('input[name="placeStatus"]:checked')?.value==="want"?"want":"been"}
+const defaultNewStatus=()=>listView==="want"?"want":"been";
+function openModal(){$("modalShade").style.display="flex";setTimeout(()=>$("nameInput").focus(),50)}
+function closeModal(){$("modalShade").style.display="none";editingId=null;pendingCoords=null;dialogToken++}
+function anyModalOpen(){return [...document.querySelectorAll(".modalShade")].some(el=>el.style.display==="flex")}
+
+function openEdit(id){
+ const p=places.find(x=>x.id===String(id));if(!p)return;
+ dialogToken++;
+ editingId=p.id;pendingCoords={lat:p.lat,lng:p.lng};
+ $("modalTitle").textContent="Edit place";setDialogStatus(statusOf(p));
+ $("nameInput").value=p.name||"";$("countryInput").value=p.country||"";$("notesInput").value=p.notes||"";
+ $("coordsInput").value=`${p.lat.toFixed(6)}, ${p.lng.toFixed(6)}`;$("pickSource").textContent="";
+ $("deleteBtn").style.display="block";openModal();
+}
+async function deletePlaceById(id){
+ const p=places.find(x=>x.id===String(id));if(!p)return;
+ if(!confirm(`Delete "${p.name}"${p.country?` (${p.country})`:""}?`))return;
+ await commit(()=>{places=places.filter(x=>x.id!==p.id)},"The delete");
+}
+window.editPlaceById=openEdit;window.deletePlaceById=deletePlaceById;
+
+$("saveBtn").onclick=async()=>{
+ const name=$("nameInput").value.trim();
+ if(!name){$("nameInput").focus();return}
+ if(!pendingCoords)return;
+ const country=$("countryInput").value.trim(),notes=$("notesInput").value.trim(),status=dialogStatus();
+ const id=editingId,coords={...pendingCoords};
+ $("saveBtn").disabled=true;
+ // If the place lands in a list that is hidden right now, switch to Both so it doesn't vanish.
+ if(listView!=="both"&&status!==listView)setView("both");
+ const ok=await commit(()=>{
+  const now=new Date().toISOString();
+  if(id){const p=places.find(x=>x.id===id);if(p)Object.assign(p,{name,country,notes,status,updatedAt:now})}
+  else places.push({id:newId(),name,country,notes,status,lat:coords.lat,lng:coords.lng,createdAt:now,updatedAt:now});
+ },id?"The edit":"The new place");
+ $("saveBtn").disabled=false;
+ if(ok)closeModal();
+};
+$("deleteBtn").onclick=()=>{if(editingId){const id=editingId;closeModal();deletePlaceById(id)}};
+$("cancelBtn").onclick=closeModal;
+$("modalShade").onclick=e=>{if(e.target===$("modalShade"))closeModal()};
+document.addEventListener("keydown",e=>{
+ if(e.key==="Escape"){closeModal();closeChooser();$("profileShade").style.display="none";cancelImport()}
+ if(e.key==="Enter"&&$("modalShade").style.display==="flex"&&e.target.tagName==="INPUT")$("saveBtn").click();
+});
+
+/* ---------- Nominatim (polite: max 1 request/second, English results) ---------- */
+let nominatimChain=Promise.resolve(),lastNominatim=0;
+function nominatim(url){
+ const run=async()=>{
+  const wait=1100-(Date.now()-lastNominatim);if(wait>0)await new Promise(r=>setTimeout(r,wait));
+  lastNominatim=Date.now();
+  const ctl=new AbortController();const t=setTimeout(()=>ctl.abort(),12000);
+  try{const r=await fetch(url,{signal:ctl.signal});if(!r.ok)throw new Error(r.status);return await r.json()}
+  finally{clearTimeout(t)}
+ };
+ const p=nominatimChain.then(run,run);nominatimChain=p.catch(()=>{});return p;
+}
+async function reverseLookup(lat,lng,zoom=14){
+ try{
+  const j=await nominatim(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}&zoom=${zoom}&addressdetails=1&accept-language=en`);
+  const a=j.address||{};
+  const name=a.city||a.town||a.village||a.municipality||a.hamlet||a.suburb||a.county||j.name||"";
+  return {name,country:a.country||"",ok:true};
+ }catch{return {name:"",country:"",ok:false}}
+}
+
+/* ---------- map-click feature selection ---------- */
+const BROAD_PLACE=new Set(["continent","country","state","province","region","county","district"]);
+const SETTLEMENT=new Set(["city","town","village","hamlet"]);
+const LOCALITY=new Set(["suburb","quarter","neighbourhood","isolated_dwelling","locality"]);
+const LANDMARK_CLASS=new Set(["peak","volcano","attraction","museum","monument","viewpoint","castle","memorial","ruins","temple","place_of_worship","zoo","theme_park","lighthouse","waterfall","national_park","island"]);
+
+function featureName(f){const p=f?.properties||{};return String(p["name:en"]||p["name:latin"]||p.name||"").trim()}
+function featureSourceLayer(f){return String(f?.sourceLayer||f?.layer?.["source-layer"]||"").toLowerCase()}
+function featurePoint(f){
+ const g=f?.geometry;
+ if(g?.type==="Point"&&Array.isArray(g.coordinates))return {lng:+g.coordinates[0],lat:+g.coordinates[1]};
+ return null;
+}
+function featureKind(f){
+ const sl=featureSourceLayer(f),id=String(f?.layer?.id||"").toLowerCase();
+ const cls=String(f?.properties?.class||"").toLowerCase();
+ if(sl==="mountain_peak"||id.includes("mountain")||id.includes("peak"))return "Mountain / peak";
+ if(sl==="place"){
+  if(SETTLEMENT.has(cls))return cls[0].toUpperCase()+cls.slice(1);
+  if(cls==="island")return "Island";
+  if(LOCALITY.has(cls))return "Area";
+  return cls||"Place";
+ }
+ if(sl==="poi")return "Landmark / POI";
+ if(sl==="aerodrome_label")return "Airport";
+ if(sl==="water_name")return "Water";
+ if(sl==="park")return "Park";
+ return sl||"Map feature";
+}
+/* Base score: how likely this is a place the user means to save. <=0 means ignore. */
+function featureScore(f){
+ const name=featureName(f);if(!name)return -9999;
+ const sl=featureSourceLayer(f),id=String(f?.layer?.id||"").toLowerCase();
+ const p=f?.properties||{};const cls=String(p.class||"").toLowerCase(),sub=String(p.subclass||"").toLowerCase();
+ let s=0;
+ if(sl==="mountain_peak"||id.includes("mountain")||id.includes("peak"))s+=1000;
+ else if(sl==="place"){
+  if(BROAD_PLACE.has(cls)||/country|state|continent|province/.test(id))return -9999; // "Malaysia", "Perak" labels
+  if(SETTLEMENT.has(cls))s+=900;
+  else if(cls==="island")s+=850;
+  else if(LOCALITY.has(cls))s+=600;
+  else s+=500;
+ }
+ else if(sl==="poi"||id.includes("poi"))s+=800;
+ else if(["park","water_name","aerodrome_label"].includes(sl))s+=450;
+ if(sl.includes("boundary")||id.includes("boundary")||id.includes("admin"))s-=900;
+ if(sl.includes("transportation")||id.includes("road")||id.includes("highway"))s-=700;
+ if(sl.includes("landcover")||sl.includes("landuse")||id.includes("landcover"))s-=800;
+ if(sl==="housenumber"||sl==="building")s-=900;
+ if(f?.layer?.type==="symbol")s+=180;
+ if(f?.geometry?.type==="Point")s+=100;
+ if(LANDMARK_CLASS.has(cls)||LANDMARK_CLASS.has(sub))s+=180;
+ if(cls==="city"&&Number(p.capital)>0)s+=40;
+ return s;
+}
+const PICK_RADIUS=12;          // px around the click (labels are larger than their points)
+const DIST_PENALTY=6;          // score lost per pixel from the click
+const CHOICE_MARGIN=290;       // candidates this close to the best one trigger "What did you mean?"
+const CHOICE_MIN_SCORE=600;
+
+function rankCandidates(point,features){
+ const seen=new Map();
+ for(const f of features){
+  const base=featureScore(f),name=featureName(f);
+  if(!name||base<=0)continue;
+  const ll=featurePoint(f);
+  let dist=PICK_RADIUS;
+  if(ll){try{const pp=map.project([ll.lng,ll.lat]);dist=Math.hypot(pp.x-point.x,pp.y-point.y)}catch{}}
+  const final=base-dist*DIST_PENALTY;
+  const key=name.toLowerCase()+"|"+(ll?`${ll.lat.toFixed(3)},${ll.lng.toFixed(3)}`:featureSourceLayer(f));
+  const prev=seen.get(key);
+  if(!prev||final>prev.final)seen.set(key,{f,name,base,final,coords:ll,kind:featureKind(f),sourceLayer:featureSourceLayer(f)});
+ }
+ return [...seen.values()].sort((a,b)=>b.final-a.final);
+}
+function pickFromClick(point){
+ const r=PICK_RADIUS;let features=[];
+ try{features=map.queryRenderedFeatures([[point.x-r,point.y-r],[point.x+r,point.y+r]])||[]}catch{}
+ const ranked=rankCandidates(point,features);
+ const best=ranked[0]||null;
+ const close=best?ranked.filter(c=>c.base>=CHOICE_MIN_SCORE&&c.final>=best.final-CHOICE_MARGIN).slice(0,5):[];
+ // Several different names close together → ask. Otherwise take the best.
+ const distinct=new Set(close.map(c=>c.name.toLowerCase()));
+ return {best,choices:distinct.size>1?close:null};
+}
+
+function clickShouldBeIgnored(e){
+ const t=e.originalEvent?.target;
+ if(t&&t.closest&&t.closest(".maplibregl-marker,.maplibregl-popup,.maplibregl-ctrl"))return true;
+ if(anyPopupOpen()||Date.now()-lastPopupClose<400)return true; // this click only closes the popup
+ if(anyModalOpen())return true;
+ return false;
+}
+map.on("click",e=>{
+ if(clickShouldBeIgnored(e)){closePopups();return}
+ const clickCoords={lat:e.lngLat.lat,lng:e.lngLat.lng};
+ const {best,choices}=pickFromClick(e.point);
+ if(choices)showChooser(choices,clickCoords);
+ else openAddDialog(best,clickCoords);
+});
+
+function showChooser(choices,clickCoords){
+ const list=$("choiceList");list.innerHTML="";
+ for(const c of choices){
+  const b=document.createElement("button");
+  b.innerHTML=`<b>${esc(c.name)}</b><small>${esc(c.kind)}</small>`;
+  b.onclick=()=>{closeChooser();openAddDialog(c,clickCoords)};
+  list.appendChild(b);
+ }
+ const other=document.createElement("button");
+ other.innerHTML=`<b>None of these</b><small>Use the exact spot I clicked and look up its name</small>`;
+ other.onclick=()=>{closeChooser();openAddDialog(null,clickCoords)};
+ list.appendChild(other);
+ $("chooserShade").style.display="flex";
+}
+function closeChooser(){$("chooserShade").style.display="none"}
+$("chooserCancelBtn").onclick=closeChooser;
+$("chooserShade").onclick=e=>{if(e.target===$("chooserShade"))closeChooser()};
+
+async function openAddDialog(pick,clickCoords){
+ const token=++dialogToken;
+ editingId=null;
+ const coords=(pick&&pick.coords)||clickCoords;
+ pendingCoords=coords;
+ $("modalTitle").textContent="Add place";setDialogStatus(pick?.status||defaultNewStatus());
+ $("nameInput").value=pick?.name||"";
+ $("countryInput").value=pick?.country||"";$("notesInput").value="";
+ $("coordsInput").value=`${coords.lat.toFixed(6)}, ${coords.lng.toFixed(6)}`;
+ $("pickSource").textContent=pick?`Selected from map: ${pick.kind}${pick.coords?" (feature's own location)":""}`:"Clicked spot — name looked up from OpenStreetMap";
+ $("deleteBtn").style.display="none";
+ openModal();
+ if(pick?.country&&pick?.name){$("countryInput").placeholder="";return}   // search result already has both
+ $("countryInput").placeholder="Looking up country…";
+ const g=await reverseLookup(coords.lat,coords.lng,pick?10:14);
+ if(token!==dialogToken||$("modalShade").style.display!=="flex")return;   // dialog moved on
+ $("countryInput").placeholder=g.ok?"":"Lookup failed — type the country";
+ if(!$("nameInput").value)$("nameInput").value=g.name;
+ if(!$("countryInput").value)$("countryInput").value=g.country;
+}
+
+/* ---------- profile ---------- */
+function updateProfileSummary(){
+ const parts=[];if(profile.name)parts.push(profile.name);if(profile.yearOfBirth)parts.push(`born ${profile.yearOfBirth}`);
+ $("profileText").textContent=parts.length?parts.join(" · "):"No profile set";
+}
+$("profileBtn").onclick=()=>{
+ $("profileNameInput").value=profile.name||"";$("profileBirthInput").value=profile.yearOfBirth||"";
+ $("profileShade").style.display="flex";setTimeout(()=>$("profileNameInput").focus(),50);
+};
+$("profileCancelBtn").onclick=()=>{$("profileShade").style.display="none"};
+$("profileShade").onclick=e=>{if(e.target===$("profileShade"))$("profileShade").style.display="none"};
+$("profileSaveBtn").onclick=async()=>{
+ const name=$("profileNameInput").value.trim(),yob=$("profileBirthInput").value.trim();
+ const y=new Date().getFullYear();
+ if(yob&&!(/^\d{4}$/.test(yob)&&+yob>=1900&&+yob<=y)){alert(`Enter a valid year of birth between 1900 and ${y}.`);return}
+ const ok=await commit(()=>{profile={name,yearOfBirth:yob}},"The profile");
+ if(ok)$("profileShade").style.display="none";
+};
+
+/* ---------- search: result is shown on the map (area + pin + name) ---------- */
+let searchResult=null,searchMarker=null;
+const SEARCH_COLOR="#7c3aed";   // purple: orange now means "Want to go"
+function searchKind(x){
+ const t=String(x.addresstype||x.type||"").replace(/_/g," ");
+ return t?t[0].toUpperCase()+t.slice(1):"Search result";
+}
+function drawSearchArea(){
+ for(const id of ["search-area-fill","search-area-line","search-point-halo"]){try{if(map.getLayer(id))map.removeLayer(id)}catch{}}
+ try{if(map.getSource("search-area"))map.removeSource("search-area")}catch{}
+ if(!searchResult||!map.isStyleLoaded())return;
+ const geom=searchResult.geometry;
+ const isArea=geom&&/Polygon/.test(geom.type);
+ const data={type:"FeatureCollection",features:[
+  ...(isArea?[{type:"Feature",geometry:geom,properties:{}}]:[]),
+  {type:"Feature",geometry:{type:"Point",coordinates:[searchResult.lng,searchResult.lat]},properties:{}}]};
+ // Put the area under the map's labels so place names stay readable.
+ const firstSymbol=(map.getStyle().layers||[]).find(l=>l.type==="symbol")?.id;
+ try{
+  map.addSource("search-area",{type:"geojson",data});
+  if(isArea){
+   map.addLayer({id:"search-area-fill",type:"fill",source:"search-area",filter:["==",["geometry-type"],"Polygon"],
+    paint:{"fill-color":SEARCH_COLOR,"fill-opacity":0.12}},firstSymbol);
+   map.addLayer({id:"search-area-line",type:"line",source:"search-area",filter:["==",["geometry-type"],"Polygon"],
+    paint:{"line-color":SEARCH_COLOR,"line-width":2.5,"line-dasharray":[2,1.5]}},firstSymbol);
+  }else{
+   // No outline available (a mountain, a landmark…): mark the spot with a soft halo.
+   map.addLayer({id:"search-point-halo",type:"circle",source:"search-area",
+    paint:{"circle-color":SEARCH_COLOR,"circle-opacity":0.16,"circle-stroke-color":SEARCH_COLOR,"circle-stroke-width":2,"circle-stroke-opacity":0.7,
+     "circle-radius":["interpolate",["linear"],["zoom"],2,14,8,26,14,40]}},firstSymbol);
+  }
+ }catch(err){console.warn("Could not draw search area",err)}
+}
+function clearSearchResult(){
+ searchResult=null;
+ if(searchMarker){searchMarker.remove();searchMarker=null}
+ drawSearchArea();
+ $("clearSearchBtn").style.display="none";
+}
+function showSearchResult(x){
+ clearSearchResult();
+ const a=x.address||{};
+ const name=String(x.name||"").trim()||String(x.display_name||"").split(",")[0].trim();
+ searchResult={name,lat:+x.lat,lng:+x.lon,country:a.country||"",kind:searchKind(x),
+  display:x.display_name||name,geometry:x.geojson||null};
+ const el=document.createElement("div");el.className="searchPin";
+ el.innerHTML=`<div class="searchLabel" title="${esc(searchResult.display)}"><span>${esc(name)}</span>
+   <button class="addBtn" title="Save this place to My Travel Map">+ Add</button><button class="closeBtn" title="Remove from map">✕</button></div>
+   <div class="searchStem"></div><div class="searchDot"></div>`;
+ el.querySelector(".addBtn").onclick=e=>{e.stopPropagation();
+  const r=searchResult;
+  openAddDialog({name:r.name,country:r.country,coords:{lat:r.lat,lng:r.lng},kind:`Search result — ${r.kind}`},{lat:r.lat,lng:r.lng});};
+ el.querySelector(".closeBtn").onclick=e=>{e.stopPropagation();clearSearchResult()};
+ searchMarker=new maplibregl.Marker({element:el,anchor:"bottom",offset:[0,11]}).setLngLat([searchResult.lng,searchResult.lat]).addTo(map);
+ searchMarker.getElement().style.zIndex="5";
+ drawSearchArea();
+ $("clearSearchBtn").style.display="";
+}
+async function searchPlace(){
+ const q=$("searchBox").value.trim();if(!q)return;
+ setStatus("Searching…");
+ try{
+  const j=await nominatim("https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&addressdetails=1&polygon_geojson=1&polygon_threshold=0.002&accept-language=en&q="+encodeURIComponent(q));
+  if(!j.length)throw new Error("none");
+  const x=j[0];
+  showSearchResult(x);
+  if(x.boundingbox){const b=x.boundingbox;map.fitBounds([[+b[2],+b[0]],[+b[3],+b[1]]],{padding:70,maxZoom:11})}
+  else map.flyTo({center:[+x.lon,+x.lat],zoom:8});
+  setStatus(x.display_name||"");
+ }catch{setStatus("Place not found (or search unavailable).",true,4000)}
+}
+$("searchBtn").onclick=searchPlace;$("searchBox").onkeydown=e=>{if(e.key==="Enter")searchPlace()};
+$("clearSearchBtn").onclick=clearSearchResult;
+$("worldBtn").onclick=()=>map.flyTo(WORLD);$("placesBtn").onclick=()=>fitPlaces();
+
+/* ---------- export ---------- */
+function download(name,text,type){
+ const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([text],{type}));a.download=name;
+ document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),2000);
+}
+const stamp=()=>new Date().toISOString().slice(0,10);
+function dbJson(){return JSON.stringify(dbObject(),null,2)}
+$("exportBtn").onclick=()=>download(`my-travel-map-${stamp()}.json`,dbJson(),"application/json");
+function xmlEsc(s){return String(s??"").replace(/[<>&'"]/g,c=>({"<":"&lt;",">":"&gt;","&":"&amp;","'":"&apos;",'"':"&quot;"}[c]))}
+$("kmlBtn").onclick=()=>{
+ // Two folders (Google My Maps imports them as one layer; the "status" column lets you style/group by it).
+ const style=(id,abgr)=>`<Style id="${id}"><IconStyle><color>${abgr}</color><scale>1.1</scale><Icon><href>https://maps.google.com/mapfiles/kml/paddle/wht-blank.png</href></Icon></IconStyle></Style>`;
+ const pm=p=>{const st=statusOf(p);return `<Placemark><name>${xmlEsc(p.name)}</name><styleUrl>#${st}</styleUrl><description>${xmlEsc(`${STATUS[st].label}\nCountry: ${p.country||""}\nNotes: ${p.notes||""}`)}</description><ExtendedData><Data name="status"><value>${STATUS[st].label}</value></Data><Data name="country"><value>${xmlEsc(p.country||"")}</value></Data><Data name="notes"><value>${xmlEsc(p.notes||"")}</value></Data></ExtendedData><Point><coordinates>${p.lng},${p.lat},0</coordinates></Point></Placemark>`};
+ const folder=st=>{const ps=places.filter(p=>statusOf(p)===st);return ps.length?`<Folder><name>${STATUS[st].section}</name>\n${ps.map(pm).join("\n")}\n</Folder>`:""};
+ const k=`<?xml version="1.0" encoding="UTF-8"?>\n<kml xmlns="http://www.opengis.net/kml/2.2"><Document><name>My Travel Map</name><ExtendedData><Data name="profileName"><value>${xmlEsc(profile.name||"")}</value></Data><Data name="yearOfBirth"><value>${xmlEsc(profile.yearOfBirth||"")}</value></Data></ExtendedData>${style("been","ffe06917")}${style("want","ff008cf0")}\n${folder("been")}\n${folder("want")}\n</Document></kml>`;
+ download(`my-travel-map-${stamp()}.kml`,k,"application/vnd.google-earth.kml+xml");
+};
+
+
+/* ---------- import (Merge / Replace / Cancel) ---------- */
+let pendingImportPlaces=null,pendingImportProfile=null;
+function cancelImport(){pendingImportPlaces=null;pendingImportProfile=null;$("importShade").style.display="none"}
+const normText=s=>String(s||"").normalize("NFKD").replace(/[̀-ͯ]/g,"").toLowerCase().replace(/[^a-z0-9]+/g," ").trim();
+// Duplicate = same name + same country (ignoring case/accents/punctuation) and within 1 km,
+// or same id, or identical coordinates with the same name.
+function isDuplicate(p,existing){
+ return existing.some(e=>(p.id&&e.id===p.id)||
+  (normText(e.name)===normText(p.name)&&(normText(e.country)===normText(p.country)||!e.country||!p.country)&&kmBetween(e,p)<1));
+}
+$("importBtn").onclick=()=>$("fileInput").click();
+$("fileInput").onchange=async e=>{
+ const f=e.target.files[0];e.target.value="";if(!f)return;
+ try{
+  const o=JSON.parse(await f.text());
+  const arr=Array.isArray(o)?o:o&&o.places;
+  if(!Array.isArray(arr))throw new Error("no places");
+  const valid=normalizePlaces(arr.filter(p=>p&&String(p.name??"").trim()));
+  pendingImportPlaces=valid;
+  pendingImportProfile=(!Array.isArray(o)&&o.profile&&typeof o.profile==="object")?cleanProfile(o.profile):null;
+  const skipped=arr.length-valid.length;
+  $("importSummary").textContent=`“${f.name}” contains ${valid.length} valid place${valid.length===1?"":"s"}${skipped?` (${skipped} unusable entries ignored)`:""}. Your current database has ${places.length}.`+
+   (pendingImportProfile&&(pendingImportProfile.name||pendingImportProfile.yearOfBirth)?" The file also contains a profile.":"");
+  $("importShade").style.display="flex";
+ }catch{alert("That is not a valid My Travel Map JSON file.")}
+};
+$("cancelImportBtn").onclick=cancelImport;
+$("importShade").onclick=e=>{if(e.target===$("importShade"))cancelImport()};
+$("mergeImportBtn").onclick=async()=>{
+ if(!pendingImportPlaces)return;
+ const incoming=pendingImportPlaces,incProfile=pendingImportProfile;cancelImport();
+ let added=0,skipped=0;
+ const ok=await commit(()=>{
+  const merged=[...places];
+  for(const raw of incoming){
+   if(isDuplicate(raw,merged)){skipped++;continue}
+   const p={...raw};if(merged.some(x=>x.id===p.id))p.id=newId();
+   merged.push(p);added++;
+  }
+  places=merged;
+  if(incProfile&&!profile.name&&!profile.yearOfBirth)profile={...incProfile};
+ },"The merge");
+ if(ok){fitPlaces();alert(`Merge complete. Added ${added} place${added===1?"":"s"}; skipped ${skipped} duplicate${skipped===1?"":"s"}.\nYour travel map now has ${places.length} places.`)}
+};
+$("replaceImportBtn").onclick=async()=>{
+ if(!pendingImportPlaces)return;
+ const incoming=pendingImportPlaces,incProfile=pendingImportProfile;
+ if(!confirm(`Replace ALL ${places.length} current places with the ${incoming.length} imported places?\n\nA backup of the current database will be downloaded first.`))return;
+ cancelImport();
+ download(`my-travel-map-BEFORE-REPLACE-${new Date().toISOString().slice(0,19).replace(/[:T]/g,"-")}.json`,dbJson(),"application/json");
+ const ok=await commit(()=>{
+  const ids=new Set();
+  places=incoming.map(p=>{const q={...p};if(ids.has(q.id))q.id=newId();ids.add(q.id);return q});
+  if(incProfile)profile={...incProfile};
+ },"The replacement");
+ if(ok){fitPlaces();alert(`Replacement complete. Your travel map now contains ${places.length} places.`)}
+};
+
+window.addEventListener("resize",()=>map.resize());
+// Test hooks (harmless in normal use).
+window.__travelMap={get listView(){return listView},get searchResult(){return searchResult},featureScore,rankCandidates,pickFromClick,isDuplicate,normalizePlace,get places(){return places},get profile(){return profile},map};
+setView(listView);
+startApp();
+</script>
+</body></html>

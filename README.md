@@ -2,11 +2,16 @@
 
 A personal, local-first travel map: record the places you **have been** (blue) and the places you **want to go** (orange) on a free, detailed world map.
 
-- Runs on your own computer — a tiny Python server plus one HTML page.
-- Your data lives in `travel-data.json` next to the app (not in this repository).
+Two editions live in this repository:
+
+| Edition | Folder | Data stored in | Who uses it |
+|---|---|---|---|
+| **Desktop v8.2** | repository root | `travel-data.json` next to the app (not in this repository) | You, on your own computer |
+| **Online v9.0** | [`online/`](online/) | Supabase (Postgres), one private row per Google account | Anyone you share the link with, each with their own map |
+
 - Free mapping: [MapLibre GL JS](https://maplibre.org/) 5.24.0 (bundled in `lib/`) with [OpenFreeMap](https://openfreemap.org/) tiles and OpenStreetMap Nominatim search. No API keys.
 
-## Run it
+## Run the desktop edition
 
 | Computer | Start with |
 |---|---|
@@ -14,6 +19,10 @@ A personal, local-first travel map: record the places you **have been** (blue) a
 | Mac | `Launch My Travel Map.command` |
 
 Requires Python 3.7+. The app opens at `http://127.0.0.1:8765/` (or another free port). Keep the launcher window open while using it. Always start from the unzipped folder, never from inside a ZIP.
+
+## Put the online edition up
+
+Follow [`online/SETUP-GUIDE.txt`](online/SETUP-GUIDE.txt): create a free Supabase project, run `online/supabase-setup.sql`, turn on Google sign-in, put your Project URL and anon/publishable key in `online/site/config.js`, then drag `online/site/` onto Netlify Drop. Move your desktop data across with **Import → Merge** of `travel-data.json`.
 
 ## Features
 
@@ -33,7 +42,8 @@ Requires Python 3.7+. The app opens at `http://127.0.0.1:8765/` (or another free
 | `Launch My Travel Map*.{bat,command}` | Launchers |
 | `lib/` | MapLibre GL JS 5.24.0 (BSD-3-Clause) |
 | `README.txt` | User guide and version history |
-| `docs/PROJECT_CONTEXT.txt` | Requirements, design rules and regression checklist |
+| `docs/PROJECT_CONTEXT.txt` | Requirements, design rules, version history (v7 → v9) and regression checklist |
+| `online/` | Online edition: `site/` (Netlify), `supabase-setup.sql`, `SETUP-GUIDE.txt` |
 
 ## Your data
 

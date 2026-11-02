@@ -1,0 +1,24 @@
+# Netlify settings for My Travel Map Online (static site, no build step).
+[build]
+  publish = "."
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    X-Frame-Options = "DENY"
+
+# Always fetch the newest app page and settings (same "no stale version" rule as the desktop app).
+[[headers]]
+  for = "/"
+  [headers.values]
+    Cache-Control = "no-cache"
+[[headers]]
+  for = "/index.html"
+  [headers.values]
+    Cache-Control = "no-cache"
+[[headers]]
+  for = "/config.js"
+  [headers.values]
+    Cache-Control = "no-cache"

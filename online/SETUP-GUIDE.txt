@@ -1,0 +1,170 @@
+MY TRAVEL MAP v9 ONLINE — SETUP GUIDE
+=====================================
+
+What this is
+------------
+An online edition of My Travel Map. Anyone you share the link with can sign in
+with their Google account and keep their OWN private travel map (Been here /
+Want to go, profile, notes) from any browser, on any device. Nobody can see
+anyone else's places.
+
+Your desktop app (v8.2 + travel-data.json) is untouched and keeps working.
+
+How it fits together (all free tiers, no credit card needed)
+  1. Netlify   — hosts the web page at a public address (https://xxxx.netlify.app)
+  2. Supabase  — Google sign-in + database; one private row per person
+  3. Google    — "Sign in with Google" (an OAuth client you create once)
+  4. OpenFreeMap + OpenStreetMap Nominatim — map and place search, as before
+
+Folder contents
+  site/                 <- the website. This is the folder you drag onto Netlify.
+    index.html          the app
+    config.js           the 2 Supabase values you paste in (step 2)
+    netlify.toml        hosting settings (no-cache for the app page)
+    lib/                MapLibre 5.24.0 + supabase-js 2.117.3 (bundled, no CDN)
+  supabase-setup.sql    database table + security rules (step 1)
+  SETUP-GUIDE.txt       this file
+
+Allow about 30–40 minutes the first time. Do the steps in order.
+
+
+STEP 1 — Create the Supabase project (database + sign-in)
+---------------------------------------------------------
+ 1. Go to https://supabase.com → Start your project → sign up (you can use
+    "Continue with GitHub" or email).
+ 2. New project:
+      Name:      my-travel-map
+      Database password: generate one and keep it somewhere safe
+      Region:    Southeast Asia (Singapore)
+    → Create new project. Wait ~2 minutes until it is ready.
+ 3. Left menu → SQL Editor → New query.
+    Open supabase-setup.sql in Notepad, copy ALL of it, paste, press Run.
+    Expected result: "Success. No rows returned".
+ 4. Get the two values for config.js:
+    Click "Connect" (top of the project page) or Project Settings → API Keys.
+      Project URL   e.g. https://abcdefghijklmnop.supabase.co
+      Public key    the "anon" key (legacy) or the "publishable" key
+                    (starts sb_publishable_...). Either works.
+    NEVER use the "service_role" / "secret" key in the website.
+
+
+STEP 2 — Put the values into config.js
+--------------------------------------
+ 1. Open site\config.js in Notepad.
+ 2. Replace YOUR_SUPABASE_PROJECT_URL and YOUR_SUPABASE_ANON_KEY with the two
+    values from step 1.4 (keep the quotes). Save.
+    It should look like:
+      supabaseUrl: "https://abcdefghijklmnop.supabase.co",
+      supabaseAnonKey: "eyJhbGciOi....",
+    These are public by design — the database rules (step 1.3) are what keep
+    each person's data private.
+
+
+STEP 3 — Publish the website on Netlify
+---------------------------------------
+ 1. Go to https://app.netlify.com/drop
+ 2. Drag the whole "site" folder onto the page. It uploads in a few seconds and
+    gives you an address like https://random-name-123.netlify.app
+ 3. Claim it so it stays online: sign up / log in to Netlify when prompted
+    (free plan). Unclaimed drops are not kept.
+ 4. Optional: Site configuration → Change site name → e.g. "jack-travel-map"
+    gives https://jack-travel-map.netlify.app
+ 5. Write down your final address. Below it is called YOUR-SITE
+    (for example https://jack-travel-map.netlify.app — no slash at the end).
+    Opening it now shows the sign-in page; sign-in will not work until step 5.
+
+
+STEP 4 — Create the Google sign-in client
+-----------------------------------------
+ 1. Go to https://console.cloud.google.com → sign in with your Google account.
+    Top bar → project picker → New project → name "My Travel Map" → Create.
+    Make sure the new project is selected.
+ 2. Menu → "Google Auth Platform" (also reachable as APIs & Services →
+    OAuth consent screen) → Get started:
+      App name:            My Travel Map
+      User support email:  your email
+      Audience:            External
+      Contact email:       your email
+    → Create.
+ 3. Google Auth Platform → Audience → "Publish app" → Confirm.
+    (While it says "Testing", only Google accounts you list as test users can
+    sign in. "In production" lets anyone sign in. The app only asks for name +
+    email, so Google does not require a verification review.)
+ 4. Google Auth Platform → Clients → Create client:
+      Application type:   Web application
+      Name:               My Travel Map web
+      Authorized JavaScript origins:  YOUR-SITE
+      Authorized redirect URIs:       https://<your-project-ref>.supabase.co/auth/v1/callback
+         (= your Supabase Project URL from step 1.4 + /auth/v1/callback.
+          Supabase also shows this exact "Callback URL" on its Google provider
+          page in step 5.)
+    → Create. Copy the Client ID and Client secret.
+
+
+STEP 5 — Connect Google to Supabase
+-----------------------------------
+ 1. Supabase → Authentication → Sign In / Providers → Google → Enable.
+    Paste Client ID and Client Secret from step 4.4 → Save.
+ 2. Supabase → Authentication → URL Configuration:
+      Site URL:       YOUR-SITE
+      Redirect URLs:  Add URL → YOUR-SITE/**   → Save.
+
+
+STEP 6 — Test and move your own data in
+---------------------------------------
+ 1. Open YOUR-SITE → "Sign in with Google" → choose your account.
+    You return to the app; the sidebar shows "Signed in as …" and
+    "✓ Saved online — 0 places (new account)".
+ 2. Bring your existing travel history across:
+    Import → choose the travel-data.json from your desktop app folder
+    (My_Travel_Map_v8.2) → Merge with existing.
+    All places, Want-to-go items and your profile are copied to your online map.
+    The desktop file is only read, never changed.
+ 3. Test from your phone: open YOUR-SITE, sign in with the same Google account
+    — the same places appear.
+ 4. Ask one other person to sign in: they get an empty map of their own.
+
+
+STEP 7 — Share
+--------------
+Send people YOUR-SITE. That is all they need: a browser and a Google account.
+
+
+Updating the app later
+----------------------
+Drag the updated "site" folder onto the Netlify site's Deploys page
+(Netlify → your site → Deploys → drag and drop). Keep your filled-in config.js.
+Users' data lives in Supabase, so updating the website never touches it.
+
+
+Things to know (free-tier limits)
+---------------------------------
+ 1. Supabase free projects PAUSE after 7 days with no activity. Anyone using
+    the app counts as activity. If it pauses, sign-in fails until you open
+    supabase.com → your project → "Restore project" (data is kept).
+    Upgrading to Supabase Pro (US$25/month) removes pausing.
+ 2. Supabase free limits: 50,000 monthly active users, 500 MB database.
+    One travel map of ~340 places is about 90 KB, so 500 MB ≈ 5,000+ users.
+ 3. Each person's map is capped at about 5 MB (≈ 20,000 places).
+ 4. Place search uses the public OpenStreetMap Nominatim service, which is
+    meant for light use. Fine for friends and family; if usage grows to
+    hundreds of active users, switch search to a paid/self-hosted geocoder.
+ 5. Backups: each user can press "Backup JSON" any time. As owner you can also
+    export the whole table in Supabase → Table Editor → travel_maps → Export.
+ 6. Deleting a user: Supabase → Authentication → Users → delete. Their travel
+    map row is deleted automatically with them.
+ 7. You (as Supabase owner) can technically see all rows in the dashboard.
+    Tell users this if privacy matters to them.
+
+
+How safety is preserved from the desktop version
+------------------------------------------------
+ - Every Add / Edit / Delete / Profile / Import waits for the server to
+   confirm the save; on failure it is undone and a clear error is shown.
+ - If the same account is open in two tabs or devices, an older page cannot
+   overwrite newer data: it is told to reload (same protection as the desktop
+   app's "stale" check).
+ - Import still offers Merge / Replace all (with automatic backup) / Cancel.
+ - Places are no longer copied into browser storage (important on shared
+   computers). Only display preferences (theme, map style, tab, collapsed
+   countries) are kept in the browser.

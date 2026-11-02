@@ -1220,3 +1220,21 @@ Tests run before release: 14 server checks + 41 end-to-end browser checks (Playw
 - "✓ Been" (list) and "✓ I've been here" (popup) move a want place to been.
 - KML: two Folders + blue/orange styles + "status" ExtendedData column.
 - Tested: 14 server + 43 regression + 44 real-data checks (user's 305-place file, read-only copy).
+
+# 45. v9.0 ONLINE EDITION (11 Oct 2026) — hosted, multi-user
+
+User asked to host the app online and share it: each person uses it in a browser with their OWN data.
+Decisions (user-chosen): Supabase (auth + Postgres) + Netlify static hosting; Google sign-in only; open sign-up (anyone with the link).
+The local desktop app (v8.2 + travel-data.json) remains and is unchanged; v9 online is a separate package (repo folder `online/`).
+
+Package: `online/` = `site/` (drag onto Netlify Drop), `supabase-setup.sql`, `SETUP-GUIDE.txt`.
+- site/index.html = v8.2 UI with storage swapped; site/config.js holds supabaseUrl + anon/publishable key (public by design);
+  netlify.toml (no-cache for / , index.html, config.js; nosniff, X-Frame-Options DENY); lib/ bundles MapLibre 5.24.0 + supabase-js 2.117.3 (no CDN).
+- DB: table public.travel_maps(user_id uuid PK = auth.uid(), data jsonb [same JSON structure as travel-data.json], revision bigint, updated_at); 5 MB size check.
+  RLS: authenticated users select/insert/update/delete only their own row; anon has no access.
+- Save = RPC save_travel_map(p_data, p_base_revision): optimistic concurrency (revision must match, else 'stale' → UI offers reload).
+- commit() semantics unchanged: apply → RPC → confirm → else rollback + clear error. Unknown top-level JSON fields preserved.
+- Removed online: localStorage copy of places/profile and "Sync browser → JSON" (privacy on shared computers). UI prefs still in localStorage.
+- Sign-in screen (Google, PKCE flow), "Signed in as … / Sign out" in header. Migration path: Import → Merge the desktop travel-data.json.
+- Tests: SQL/RLS checks in PGlite + 36 Playwright end-to-end checks against a simulated Supabase. Not yet verified against a live Supabase project / real Google login.
+- Free-tier caveats: Supabase free projects pause after 7 days without activity; 50k MAU, 500 MB DB; public Nominatim is for light use.
