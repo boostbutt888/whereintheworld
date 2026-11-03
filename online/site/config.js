@@ -1,9 +1,9 @@
 /* My Travel Map Online — connection settings.
-   Fill in the two values from Supabase → Project Settings → API (or "Connect" → App Frameworks):
-     supabaseUrl      = Project URL, e.g. https://abcdefghijklmnop.supabase.co
-     supabaseAnonKey  = the "anon" / "publishable" public key (NOT the service_role / secret key)
+   Values from Supabase → Project Settings → API Keys (or "Connect" → App Frameworks):
+     supabaseUrl      = Project URL
+     supabaseAnonKey  = the whole "publishable" key, starting "sb_publishable_" (NOT the secret / service_role key)
    Both values are safe to publish: every person's data is protected by Row Level Security. */
 window.TRAVEL_MAP_CONFIG = {
-  supabaseUrl: "YOUR_SUPABASE_PROJECT_URL",
-  supabaseAnonKey: "YOUR_SUPABASE_ANON_KEY"
+  supabaseUrl: "https://vonjvfthupuarxhhtahh.supabase.co",
+  supabaseAnonKey: "sb_publishable_M4i3XU91P5bKdcgUwGEX7w_vmkH5OGn"
 };

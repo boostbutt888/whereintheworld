@@ -424,19 +424,37 @@ async function startApp(){
   $("googleSignInBtn").disabled=true;
   return;
  }
- sb=window.supabase.createClient(cfg.supabaseUrl,cfg.supabaseAnonKey,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true,flowType:"pkce"}});
- // Show an error returned from Google/Supabase in the URL, if any.
+ // Catch the most common setup mistake: a key pasted without its "sb_publishable_" prefix (or a partial key).
+ const key=String(cfg.supabaseAnonKey).trim();
+ if(!/^sb_publishable_[A-Za-z0-9_-]{20,}$/.test(key)&&!/^eyJ[\w-]+\.[\w-]+\.[\w-]+$/.test(key)){
+  showSignIn('config.js: supabaseAnonKey does not look like a Supabase public key. Copy the whole "publishable" key, including the "sb_publishable_" at the start (or the legacy "anon" key starting "eyJ").',true);
+  $("googleSignInBtn").disabled=true;
+  return;
+ }
+ if(/^sb_secret_/.test(key)||/service_role/.test(key)){showSignIn("config.js contains a SECRET key. Replace it with the publishable key and rotate the secret in Supabase.",true);$("googleSignInBtn").disabled=true;return}
+ // Finish the Google sign-in ourselves (instead of detectSessionInUrl) so any failure is shown, not swallowed.
+ sb=window.supabase.createClient(cfg.supabaseUrl,key,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:false,flowType:"pkce"}});
  const qs=new URLSearchParams(location.search+"&"+location.hash.slice(1));
  const urlErr=qs.get("error_description")||qs.get("error");
+ const code=qs.get("code");
+ let exchangeErr="";
+ if(code){
+  try{const {error}=await sb.auth.exchangeCodeForSession(code);if(error)exchangeErr=error.message||String(error)}
+  catch(e){exchangeErr=String(e?.message||e)}
+ }
+ if(/[?&](code|error)=|#access_token|#error/.test(location.href))history.replaceState(null,"",location.pathname);
  let session=null;
  try{({data:{session}}=await sb.auth.getSession())}catch{}
  if(session?.user){
   currentUser=session.user;
-  if(/[?&](code|error)=|#access_token|#error/.test(location.href))history.replaceState(null,"",location.pathname);
   showAccount();
   await loadData();
+ }else if(urlErr){
+  showSignIn("Sign-in failed: "+urlErr,true);
+ }else if(exchangeErr){
+  showSignIn(`Sign-in could not be completed: ${exchangeErr}. Check that config.js has the full publishable key, and that this page's address (${location.origin}) is in Supabase → Authentication → URL Configuration → Redirect URLs. Then try again.`,true);
  }else{
-  showSignIn(urlErr?("Sign-in failed: "+urlErr):"",!!urlErr);
+  showSignIn();
  }
  sb.auth.onAuthStateChange((event,s)=>{
   if(event==="SIGNED_OUT"){currentUser=null;connected=false;places=[];refresh();showSignIn()}
